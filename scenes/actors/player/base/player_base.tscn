@@ -1,0 +1,33 @@
+[gd_scene format=3 uid="uid://cb407dgeevufa"]
+
+[ext_resource type="Script" uid="uid://d24ighgu4nwva" path="res://scenes/actors/player/base/player_base.gd" id="1_20c55"]
+[ext_resource type="Script" uid="uid://cr2ssu775f3kw" path="res://scripts/core/states/state_machine.gd.gd" id="2_64xnr"]
+[ext_resource type="Script" uid="uid://bi4qje0lyh7vc" path="res://scripts/core/states/player_states/idle.gd" id="3_rql30"]
+[ext_resource type="Script" uid="uid://mql58g3j0hmq" path="res://scripts/core/states/player_states/jump.gd" id="4_3vxcb"]
+[ext_resource type="Script" uid="uid://b1re534k5k14k" path="res://scripts/core/states/player_states/move.gd" id="5_8jf8w"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_838xr"]
+radius = 16.0
+height = 80.0
+
+[node name="PlayerBase" type="CharacterBody2D" unique_id=571628808]
+script = ExtResource("1_20c55")
+
+[node name="Sprite" type="Sprite2D" parent="." unique_id=649957663]
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=708154101]
+
+[node name="CollisionShape" type="CollisionShape2D" parent="." unique_id=1110341349]
+shape = SubResource("CapsuleShape2D_838xr")
+
+[node name="StateMachine" type="Node" parent="." unique_id=171601600]
+script = ExtResource("2_64xnr")
+
+[node name="Idle" type="Node" parent="StateMachine" unique_id=519076083]
+script = ExtResource("3_rql30")
+
+[node name="Jump" type="Node" parent="StateMachine" unique_id=1121989548]
+script = ExtResource("4_3vxcb")
+
+[node name="Move" type="Node" parent="StateMachine" unique_id=1155098147]
+script = ExtResource("5_8jf8w")

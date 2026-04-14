@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://b75jx0sbh7nht"]
+
+[ext_resource type="Script" uid="uid://dtelcuoheir2v" path="res://scenes/levels/test_rooms/test_student.gd" id="1_u1up4"]
+[ext_resource type="PackedScene" uid="uid://dr6cfgcs3dhc2" path="res://scenes/actors/player/student/student.tscn" id="2_nbg0o"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_w3c8q"]
+size = Vector2(1273, 50)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_k1mli"]
+size = Vector2(200, 30)
+
+[node name="TestStudentRoom" type="Node2D" unique_id=499657457]
+script = ExtResource("1_u1up4")
+
+[node name="Ground" type="StaticBody2D" parent="." unique_id=1298737284]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Ground" unique_id=639877203]
+position = Vector2(636.5, 550)
+shape = SubResource("RectangleShape2D_w3c8q")
+
+[node name="Platform" type="StaticBody2D" parent="." unique_id=340947454]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Platform" unique_id=1180682400]
+position = Vector2(472, 455)
+shape = SubResource("RectangleShape2D_k1mli")
+
+[node name="PlayerSpawn" type="Marker2D" parent="." unique_id=858319504]
+position = Vector2(100, 300)
+
+[node name="Student" parent="." unique_id=571628808 instance=ExtResource("2_nbg0o")]
+position = Vector2(100, 300)

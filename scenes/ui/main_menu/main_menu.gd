@@ -9,11 +9,15 @@ class_name MainMenu
 @onready var quit_button: Button = $MenuContainer/QuitButton
 @onready var version_label: Label = $MenuContainer/VersionLabel
 
+# 在main_menu.gd的_ready函数中添加
 func _ready():
 	print("主菜单已加载")
 	
 	# 设置版本号
 	version_label.text = "文字地狱大战 v1.0.0 Alpha"
+	
+	# 检查按钮状态
+	check_button_states()
 	
 	# 连接按钮信号
 	connect_button_signals()
@@ -21,19 +25,45 @@ func _ready():
 	# 检查存档
 	check_save_data()
 	
-	# 设置焦点
-	new_game_button.grab_focus()
+	print("主菜单加载完成")
+
+func check_button_states():
+	print("\n=== 按钮状态检查 ===")
+	
+	var buttons = [
+		{"name": "新游戏", "node": $MenuContainer/NewGameButton},
+		{"name": "继续", "node": $MenuContainer/ContinueButton},
+		{"name": "设置", "node": $MenuContainer/SettingsButton},
+		{"name": "退出", "node": $MenuContainer/QuitButton}
+	]
+	
+	for btn in buttons:
+		if btn.node:
+			print("按钮 '%s':" % btn.name)
+			print("  - 可见: %s" % btn.node.visible)
+			print("  - 禁用: %s" % btn.node.disabled)
+			print("  - 焦点模式: %s" % btn.node.focus_mode)
+			print("  - 鼠标过滤: %s" % btn.node.mouse_filter)
+			print("  - 矩形位置: %s" % btn.node.get_global_rect())
+		else:
+			print("✗ 按钮 '%s' 未找到" % btn.name)
 
 func connect_button_signals():
-	print("连接按钮信号...")
+	print("\n=== 连接按钮信号 ===")
 	
-	new_game_button.pressed.connect(_on_new_game_pressed)
-	continue_button.pressed.connect(_on_continue_pressed)
-	settings_button.pressed.connect(_on_settings_pressed)
-	quit_button.pressed.connect(_on_quit_pressed)
+	# 先断开所有连接
+	$MenuContainer/NewGameButton.pressed.disconnect(_on_new_game_pressed)
+	$MenuContainer/ContinueButton.pressed.disconnect(_on_continue_pressed)
+	$MenuContainer/SettingsButton.pressed.disconnect(_on_settings_pressed)
+	$MenuContainer/QuitButton.pressed.disconnect(_on_quit_pressed)
 	
-	print("所有按钮信号已连接")
-
+	# 重新连接
+	$MenuContainer/NewGameButton.pressed.connect(_on_new_game_pressed)
+	$MenuContainer/ContinueButton.pressed.connect(_on_continue_pressed)
+	$MenuContainer/SettingsButton.pressed.connect(_on_settings_pressed)
+	$MenuContainer/QuitButton.pressed.connect(_on_quit_pressed)
+	
+	print("所有按钮信号已重新连接")
 func check_save_data():
 	print("检查存档数据...")
 	
@@ -52,16 +82,18 @@ func check_save_data():
 func _on_new_game_pressed():
 	print("新游戏按钮被点击")
 	
-	# 播放点击音效
-	play_button_sound()
+	# 播放音效
+	if AudioManager.instance:
+		AudioManager.instance.play_sfx("res://assets/audio/sfx/ui/button_click.ogg")
 	
-	# 通知GameManager开始新游戏
+	# 确保隐藏主菜单
+	queue_free()  # 或者调用GameManager隐藏主菜单
+	
+	# 通过GameManager开始新游戏
 	if GameManager.instance:
 		GameManager.instance.start_new_game()
 	else:
-		print("错误：GameManager未找到")
-		# 备用方案
-		start_game_fallback()
+		print("错误：GameManager实例未找到")
 
 func _on_continue_pressed():
 	print("继续游戏按钮被点击")

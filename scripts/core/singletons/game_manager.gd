@@ -1,3 +1,5 @@
+
+
 extends Node
 
 # 单例实例
@@ -75,18 +77,20 @@ func show_main_menu():
 	# 清空UI容器
 	clear_ui_container()
 	
-	# 通过新的 UIManager 显示主菜单
-	if UIManager.instance:
+	# 切换到菜单状态
+	if layer_manager:
+		layer_manager.switch_to_menu("main_menu")
+	elif UIManager.instance:
 		UIManager.instance.show_main_menu()
-		print("主菜单已通过UIManager显示")
 	else:
-		print("错误：UIManager实例未找到")
-		# 备用方案：直接加载
+		# 备用方案
 		var main_menu_scene = load("res://scenes/ui/main_menu/main_menu.tscn")
 		if main_menu_scene:
 			var main_menu = main_menu_scene.instantiate()
 			ui_container.add_child(main_menu)
 			print("主菜单已直接加载")
+			
+			
 func clear_ui_container():
 	for child in ui_container.get_children():
 		child.queue_free()
@@ -127,20 +131,51 @@ func create_fallback_menu():
 
 	ui_container.add_child(menu)
 	print("备用菜单已创建")
-
+	
+# 在顶部添加
+@onready var layer_manager: Node = get_node("/root/LayerManager") if has_node("/root/LayerManager") else null
+	
+	
+	
 func start_new_game():
 	print("开始新游戏")
 	current_state = GameState.PLAYING
-
+	
 	# 清空所有容器
 	clear_all_containers()
-
+	
 	# 重置玩家数据
 	reset_player_data()
+	
+	# 切换到游戏状态
+	if layer_manager:
+		layer_manager.switch_to_game()
+	else:
+		# 备用方案
+		hide_main_menu()
+		show_hud()
+		
+	# 加载测试关卡
+	create_test_level()
+	
+	print("新游戏开始完成")
 
-	# 加载第一关
-	await load_level(1)  # 添加 await
-
+func hide_main_menu():
+	print("隐藏主菜单...")
+	
+	# 方法1：如果主菜单是通过UIManager显示的
+	if UIManager.instance:
+		UIManager.instance.hide_ui("main_menu")
+		print("通过UIManager隐藏主菜单")
+	
+	# 方法2：如果主菜单是直接添加到ui_container的
+	if ui_container:
+		# 查找并移除主菜单节点
+		var main_menu_nodes = ui_container.get_children()
+		for child in main_menu_nodes:
+			if "main_menu" in child.name.to_lower() or child.name == "MainMenu":
+				print("找到并移除主菜单节点: %s" % child.name)
+				child.queue_free()
 func clear_all_containers():
 	# 清空世界容器
 	for child in world_container.get_children():
@@ -174,45 +209,64 @@ func load_level(level_number: int):
 	# 这里会通过LevelManager加载关卡
 	# 暂时创建测试关卡
 	create_test_level()
-
 func create_test_level():
 	print("创建测试关卡...")
-
+	
 	# 清空世界容器
 	for child in world_container.get_children():
 		child.queue_free()
+	
+	# 加载学生测试关卡
+	var test_level_scene = load("res://scenes/levels/test_rooms/test_student.tscn")
+	if test_level_scene:
+		var test_level = test_level_scene.instantiate()
+		test_level.name = "StudentTestLevel"
+		world_container.add_child(test_level)
+		print("学生测试关卡已加载")
+	else:
+		print("错误：无法加载测试关卡，创建简单关卡")
+		create_simple_test_level()
+	
+	print("测试关卡创建完成")
 
-	# 创建测试关卡节点
+func create_simple_test_level():
+	"""创建简单测试关卡"""
+	print("创建简单测试关卡...")
+	
 	var test_level = Node2D.new()
-	test_level.name = "TestLevel_01"
-
+	test_level.name = "SimpleTestLevel"
+	
 	# 添加玩家
-	var player = preload("res://scenes/actors/player/student/student.tscn")
-	if player:
-		var player_instance = player.instantiate()
-		player_instance.position = Vector2(100, 100)
-		test_level.add_child(player_instance)
-		print("玩家已添加到关卡")
-
+	var player_scene = load("res://scenes/actors/player/student/student.tscn")
+	if player_scene:
+		var player = player_scene.instantiate()
+		player.position = Vector2(100, 100)
+		test_level.add_child(player)
+		print("玩家已添加到简单关卡")
+	
+	# 添加地面
+	var ground = StaticBody2D.new()
+	ground.position = Vector2(500, 500)
+	
+	var collision = CollisionShape2D.new()
+	collision.shape = RectangleShape2D.new()
+	collision.shape.size = Vector2(1000, 50)
+	ground.add_child(collision)
+	
+	test_level.add_child(ground)
+	
 	# 添加到世界容器
 	world_container.add_child(test_level)
 
-	# 显示HUD
-	show_hud()
-
-	print("测试关卡创建完成")
-
 func show_hud():
 	print("显示HUD...")
-
-	var hud_scene = load("res://scenes/ui/hud/hud.tscn")
-	if hud_scene:
-		var hud = hud_scene.instantiate()
-		ui_container.add_child(hud)
-		print("HUD已显示")
+	
+	if layer_manager:
+		layer_manager.show_ui("hud", layer_manager.LayerType.HUD)
+	elif UIManager.instance:
+		UIManager.instance.show_hud()
 	else:
-		print("HUD场景未找到，创建简单HUD")
-		create_simple_hud()
+		print("错误：无法显示HUD，LayerManager和UIManager都不可用")
 
 func create_simple_hud():
 	var hud = Control.new()

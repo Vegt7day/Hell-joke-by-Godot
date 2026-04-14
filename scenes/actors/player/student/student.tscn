@@ -1,10 +1,18 @@
 [gd_scene format=3 uid="uid://dr6cfgcs3dhc2"]
 
 [ext_resource type="Script" uid="uid://dk3ci6drkabbq" path="res://scenes/actors/player/student/student.gd" id="1_7jsl3"]
+[ext_resource type="PackedScene" uid="uid://cb407dgeevufa" path="res://scenes/actors/player/base/player_base.tscn" id="1_etu71"]
+[ext_resource type="Texture2D" uid="uid://81fnbmadhs47" path="res://assets/graphics/characters/student/student_state_02.png" id="3_xr5g5"]
 
-[node name="Student" type="Node2D" unique_id=2049747521]
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_xr5g5"]
+size = Vector2(120, 158)
+
+[node name="Student" unique_id=571628808 instance=ExtResource("1_etu71")]
 script = ExtResource("1_7jsl3")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1793774156]
+[node name="Sprite" parent="." index="0" unique_id=649957663]
+texture = ExtResource("3_xr5g5")
 
-[node name="Sprite2D" type="Sprite2D" parent="." unique_id=939642747]
+[node name="CollisionShape" parent="." index="2" unique_id=1110341349]
+position = Vector2(1, 0)
+shape = SubResource("RectangleShape2D_xr5g5")

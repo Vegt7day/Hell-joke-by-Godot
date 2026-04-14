@@ -71,9 +71,12 @@ func show_ui(ui_name: String, layer: UILayer = UILayer.MENU, data: Dictionary = 
 	var ui_instance = ui_scene.instantiate()
 	ui_instance.name = ui_name
 	
-	# 设置层级
-	ui_instance.z_index = layer
-	
+	# 设置层级 - 只对Control类型的节点设置z_index
+	if ui_instance is Control:
+		ui_instance.z_index = layer
+	else:
+		ui_instance.layer = layer
+ 
 	# 传递数据
 	if ui_instance.has_method("set_data"):
 		ui_instance.set_data(data)
@@ -166,6 +169,11 @@ func show_main_menu() -> void:
 
 func hide_main_menu() -> void:
 	hide_ui("main_menu")
+
+func show_game_ui():
+	"""显示游戏UI"""
+	show_hud()
+	hide_main_menu()
 
 func go_back() -> bool:
 	if ui_history.size() <= 1:
