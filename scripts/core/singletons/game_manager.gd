@@ -67,24 +67,26 @@ func setup_containers(world: Node2D, ui: CanvasLayer, effects: Node2D = null):
 
 	print("容器设置完成")
 	show_main_menu()
-
+# 在 game_manager.gd 中
 func show_main_menu():
 	print("显示主菜单...")
 	current_state = GameState.MAIN_MENU
-
+	
 	# 清空UI容器
 	clear_ui_container()
-
-	# 加载主菜单场景
-	var main_menu_scene = load("res://scenes/ui/main_menu/main_menu.tscn")
-	if main_menu_scene:
-		var main_menu = main_menu_scene.instantiate()
-		ui_container.add_child(main_menu)
-		print("主菜单已加载")
+	
+	# 通过新的 UIManager 显示主菜单
+	if UIManager.instance:
+		UIManager.instance.show_main_menu()
+		print("主菜单已通过UIManager显示")
 	else:
-		print("错误：无法加载主菜单场景")
-		create_fallback_menu()
-
+		print("错误：UIManager实例未找到")
+		# 备用方案：直接加载
+		var main_menu_scene = load("res://scenes/ui/main_menu/main_menu.tscn")
+		if main_menu_scene:
+			var main_menu = main_menu_scene.instantiate()
+			ui_container.add_child(main_menu)
+			print("主菜单已直接加载")
 func clear_ui_container():
 	for child in ui_container.get_children():
 		child.queue_free()

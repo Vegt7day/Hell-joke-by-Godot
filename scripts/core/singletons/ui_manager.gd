@@ -129,6 +129,9 @@ func show_dialogue(speaker: String, text: String) -> void:
 	}
 	show_ui("dialogue", UILayer.DIALOGUE, data)
 
+# 删除冲突的 show_menu 函数
+# 使用 show_main_menu() 代替
+
 func show_choice(question: String, choices: Array) -> void:
 	var data = {
 		"question": question,
