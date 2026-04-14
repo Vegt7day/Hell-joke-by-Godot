@@ -5,3 +5,11 @@
 
 [node name="shoe_projectile" unique_id=1752467600 instance=ExtResource("1_sjde8")]
 script = ExtResource("2_y6hsc")
+upward_speed = 400.0
+gravity_strength = 600.0
+invincible_time = 0.5
+rotation_speed = 2.0
+bounce_height = 100.0
+
+[node name="CPUParticles2D" parent="." index="3" unique_id=179103400]
+emitting = false

@@ -418,7 +418,6 @@ func use_shoes():
 	
 	# 更新纹理状态
 	update_sprite_based_on_game_logic()
-
 func throw_shoe(shoe_name: String):
 	"""扔鞋"""
 	print("扔鞋: %s" % shoe_name)
@@ -440,23 +439,23 @@ func throw_shoe(shoe_name: String):
 	# 播放音效
 	play_student_shoe_throw_sound()
 	
-	# 计算发射位置和方向
-	var y_offset = 10 if shoe_name == "left_shoe" else -10
-	var spawn_position = global_position + Vector2(0, y_offset)
+	# 计算发射位置
+	var y_offset = 61 if shoe_name == "left_shoe" else 61
+	var x_offset = -40 if shoe_name == "left_shoe" else 40
+	var spawn_position = global_position + Vector2(x_offset, y_offset)
 	
-	# 抛物线方向 - 向上弹
-	var throw_direction = Vector2(facing_direction, -0.8).normalized()  # 更陡峭的上抛
+	# 垂直向上方向
+	var throw_direction = Vector2(0, -1).normalized()
 	
-	# 鞋参数
+	# 鞋参数 - 调整为垂直上下运动
 	var shoe_params = {
 		"shoe_name": shoe_name,
-		"throw_power": 1.2,  # 抛射力量
-		"damage": 20.0,
-		"bounce_count": 2,
+		"upward_speed": 300.0,  # 向上速度
+		"bounce_height": 50.0,  # 弹起高度
+		"gravity": 400.0,  # 重力
 		"rotation_speed": 2.0,
 		"invincible_time": 0.5,  # 0.5秒无敌时间
-		"gravity": 600.0,  # 重力
-		"trail_color": Color(0.6, 0.4, 0.2, 0.8)  # 棕色轨迹
+		"return_duration": 1.0  # 1秒返回时间
 	}
 	
 	# 生成鞋抛射体
@@ -465,10 +464,8 @@ func throw_shoe(shoe_name: String):
 		active_shoes.append(shoe_projectile)
 		
 		# 连接信号
-		shoe_projectile.projectile_hit.connect(_on_shoe_hit.bind(shoe_name))
-		shoe_projectile.projectile_destroyed.connect(_on_shoe_destroyed.bind(shoe_projectile))
-		shoe_projectile.projectile_recovered.connect(_on_shoe_recovered.bind(shoe_projectile, shoe_name))
 		shoe_projectile.projectile_landed.connect(_on_shoe_landed.bind(shoe_projectile, shoe_name))
+		shoe_projectile.projectile_recovered.connect(_on_shoe_recovered.bind(shoe_projectile, shoe_name))
 		
 		print("鞋发射成功: %s" % shoe_name)
 		
@@ -480,7 +477,8 @@ func throw_shoe(shoe_name: String):
 		limbs[shoe_name]["thrown"] = false
 		if shoe_name in shoes_thrown:
 			shoes_thrown.erase(shoe_name)
-
+			
+			
 func _on_shoe_hit(target: Node, position: Vector2, shoe_name: String):
 	"""鞋击中目标"""
 	print("鞋击中目标: %s, 鞋: %s, 位置: %s" % [target.name, shoe_name, position])
