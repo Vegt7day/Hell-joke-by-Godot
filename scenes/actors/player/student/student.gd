@@ -9,15 +9,20 @@ var shoes_thrown: Array[String] = []
 
 # 学生图片状态枚举
 enum StudentSpriteState {
-	PEN_SELECTED = 1,           # 笔被选择（绿色），鞋未选择（白色）
+	SHOES_SELECTED_LOW_INK = 1, # 鞋被选择（绿色），笔未选择且缺墨（灰色）
 	SHOES_SELECTED = 2,         # 鞋被选择（绿色），笔未选择（白色）
-	PEN_SELECTED_LOW_INK = 3,   # 笔被选择但缺墨（灰绿色），鞋未选择（白色）
-	SHOES_SELECTED_LOW_INK = 4, # 鞋被选择（绿色），笔未选择且缺墨（灰色）
-	DOUBLE_FOOT_GREEN = 5,      # 双脚绿（鞋被扔掉），笔灰
+	DOUBLE_FOOT_WHITE_PEN_LOW = 3,  # 双脚绿，笔白	
+	DOUBLE_FOOT_GREEN = 4,      # 双脚绿（鞋被扔掉），笔灰
+	PEN_SELECTED = 5,           # 笔被选择（绿色），鞋未选择（白色）	
 	DOUBLE_FOOT_WHITE = 6,      # 双脚白（鞋被扔掉），笔绿
-	DOUBLE_FOOT_GREEN_PEN_LOW = 7,  # 双脚绿，笔灰绿
-	DOUBLE_FOOT_WHITE_PEN_LOW = 8,  # 双脚白，笔灰绿
+	DOUBLE_FOOT_GREEN_PEN_LOW = 7,  # 双脚白，笔灰绿
+	PEN_SELECTED_LOW_INK = 8,   # 笔被选择但缺墨（灰绿色），鞋未选择（白色）
 }
+
+# 抛射体相关属性
+var projectile_manager: Node
+var active_shoes: Array = []
+var ink_projectiles: Array = []
 
 var current_sprite_state = StudentSpriteState.PEN_SELECTED
 var animation_timer: float = 0.0
@@ -31,11 +36,19 @@ func _ready():
 	# 调用父类初始化
 	super._ready()
 	
+	# 确保Sprite不会被翻转
+	if sprite:
+		sprite.scale.x = abs(sprite.scale.x)  # 确保x缩放为正
+		sprite.flip_h = false  # 确保不水平翻转
+	
 	# 设置初始纹理
 	update_student_sprite()
 	
 	# 初始化学生特有属性
 	setup_student_limbs()
+	
+	# 初始化抛射体管理器
+	setup_projectile_manager()
 	
 	print("学生形态初始化完成")
 
@@ -51,9 +64,86 @@ func setup_student_limbs():
 	# 移除book，因为学生没有书
 	limbs.erase("book")
 	
+	# 确保所有必要的键都存在
+	for shoe in ["left_shoe", "right_shoe"]:
+		if not "active" in limbs[shoe]:
+			limbs[shoe]["active"] = true
+		if not "thrown" in limbs[shoe]:
+			limbs[shoe]["thrown"] = false
+		if not "position" in limbs[shoe]:
+			limbs[shoe]["position"] = Vector2.ZERO
+		if not "color" in limbs[shoe]:
+			limbs[shoe]["color"] = Color.WHITE
+	
 	# 设置初始活动肢体为笔
 	active_limb = "pen"
 
+# 在学生形态代码中，修改 setup_projectile_manager 函数
+func setup_projectile_manager():
+	"""设置抛射体管理器"""
+	print("设置抛射体管理器")
+	
+	# 方法1: 通过路径获取AutoLoad节点
+	projectile_manager = get_node("/root/ProjectileManager")
+	
+	if projectile_manager:
+		print("✓ 抛射体管理器已找到")
+		print("  管理器类型: %s" % projectile_manager.get_class())
+		
+		# 检查方法是否存在
+		if projectile_manager.has_method("spawn_projectile"):
+			print("✓ 抛射体管理器有spawn_projectile方法")
+		else:
+			print("✗ 抛射体管理器没有spawn_projectile方法")
+			# 打印所有方法
+			print("  可用方法:")
+			var methods = projectile_manager.get_method_list()
+			for method in methods:
+				print("    - %s" % method.name)
+	else:
+		print("✗ 未找到抛射体管理器")
+		# 创建简易管理器
+		create_simple_projectile_manager()
+
+func create_simple_projectile_manager():
+	"""创建简易的抛射体管理器（备用）"""
+	print("创建简易抛射体管理器")
+	
+	projectile_manager = Node.new()
+	projectile_manager.name = "SimpleProjectileManager"
+	
+	# 添加spawn_projectile方法
+	projectile_manager.spawn_projectile = func(projectile_type: String, position: Vector2, direction: Vector2, owner: Node, params: Dictionary = {}):
+		print("简易管理器生成抛射体: 类型=%s" % projectile_type)
+		
+		# 创建简单的抛射体占位
+		var projectile = Area2D.new()
+		projectile.name = "SimpleProjectile_" + projectile_type
+		
+		# 添加Sprite
+		var sprite = Sprite2D.new()
+		sprite.modulate = Color.RED
+		projectile.add_child(sprite)
+		
+		# 添加碰撞形状
+		var shape = CollisionShape2D.new()
+		shape.shape = CircleShape2D.new()
+		shape.shape.radius = 5
+		projectile.add_child(shape)
+		
+		# 添加到场景
+		var current_scene = get_tree().current_scene
+		if current_scene:
+			current_scene.add_child(projectile)
+			projectile.global_position = position
+			print("✓ 简单抛射体已创建: %s" % projectile_type)
+			return projectile
+		
+		return null
+	
+	# 添加到场景树
+	get_tree().root.add_child(projectile_manager)
+	
 func switch_limb():
 	"""学生形态切换肢体 - 覆盖父类方法"""
 	print("学生切换肢体")
@@ -95,27 +185,31 @@ func update_student_sprite():
 		return
 	
 	var texture_path = "res://assets/graphics/characters/student/"
-	var direction_prefix = "1" if facing_direction < 0 else "0"  # 左=11，右=01
 	
-	match current_sprite_state:
-		StudentSpriteState.PEN_SELECTED:
-			sprite.texture = load(texture_path + "student_state_" + direction_prefix + "5.png")  # 笔绿，鞋白
-		StudentSpriteState.SHOES_SELECTED:
-			sprite.texture = load(texture_path + "student_state_" + direction_prefix + "1.png")  # 鞋绿，笔灰
-		StudentSpriteState.PEN_SELECTED_LOW_INK:
-			sprite.texture = load(texture_path + "student_state_" + direction_prefix + "8.png")  # 笔灰绿，鞋白
-		StudentSpriteState.SHOES_SELECTED_LOW_INK:
-			sprite.texture = load(texture_path + "student_state_" + direction_prefix + "2.png")  # 鞋绿，笔白
-		StudentSpriteState.DOUBLE_FOOT_GREEN:
-			sprite.texture = load(texture_path + "student_state_" + direction_prefix + "4.png")  # 双脚绿，笔灰
-		StudentSpriteState.DOUBLE_FOOT_WHITE:
-			sprite.texture = load(texture_path + "student_state_" + direction_prefix + "6.png")  # 双脚白，笔绿
-		StudentSpriteState.DOUBLE_FOOT_GREEN_PEN_LOW:
-			sprite.texture = load(texture_path + "student_state_" + direction_prefix + "3.png")  # 双脚绿，笔白
-		StudentSpriteState.DOUBLE_FOOT_WHITE_PEN_LOW:
-			sprite.texture = load(texture_path + "student_state_" + direction_prefix + "7.png")  # 双脚白，笔灰绿
+	# 根据朝向选择正确的图片
+	var direction_prefix = "1" if facing_direction < 0 else "0"  # 左=1，右=0
+	var state_number = str(current_sprite_state)
 	
-	print("学生纹理更新为状态: %d, 朝向: %s" % [current_sprite_state, "左" if facing_direction < 0 else "右"])
+	# 确保Sprite不被翻转
+	sprite.scale.x = abs(sprite.scale.x)
+	sprite.flip_h = false
+	
+	# 生成文件名，如student_state_01.png或student_state_11.png
+	var filename = "student_state_" + direction_prefix + state_number + ".png"
+	var full_path = texture_path + filename
+	
+	# 尝试加载纹理
+	if FileAccess.file_exists(full_path):
+		var texture = load(full_path)
+		if texture:
+			sprite.texture = texture
+			print("学生纹理更新为状态: %d, 朝向: %s, 文件: %s" % [current_sprite_state, "左" if facing_direction < 0 else "右", filename])
+		else:
+			print("错误: 无法加载纹理: %s" % full_path)
+	else:
+		print("警告: 纹理文件不存在: %s" % full_path)
+		# 使用默认颜色
+		sprite.modulate = Color(0.4, 0.6, 0.8)  # 蓝色占位
 
 func update_animation():
 	"""更新动画状态"""
@@ -155,8 +249,8 @@ func _physics_process(delta: float):
 func update_sprite_based_on_game_logic():
 	"""根据游戏逻辑更新纹理状态"""
 	# 检查鞋是否被扔掉
-	var left_shoe_thrown = limbs["left_shoe"]["thrown"]
-	var right_shoe_thrown = limbs["right_shoe"]["thrown"]
+	var left_shoe_thrown = "thrown" in limbs["left_shoe"] and limbs["left_shoe"]["thrown"]
+	var right_shoe_thrown = "thrown" in limbs["right_shoe"] and limbs["right_shoe"]["thrown"]
 	var both_shoes_thrown = left_shoe_thrown and right_shoe_thrown
 	
 	# 检查笔的墨水状态
@@ -202,11 +296,11 @@ func set_sprite_state(new_state: StudentSpriteState):
 		update_student_sprite()
 
 func use_pen():
-	"""学生形态使用笔"""
-	print("学生使用笔")
+	"""学生形态使用笔 - 发射墨弹"""
+	print("学生使用笔 - 发射墨弹")
 	
 	# 检查墨水是否足够
-	var ink_cost = 100
+	var ink_cost = 8.0
 	if ink < ink_cost:
 		print("墨水不足，无法使用笔")
 		play_empty_ink_sound()
@@ -217,11 +311,11 @@ func use_pen():
 	ink = max(0, ink - ink_cost)
 	ink_changed.emit(old_ink, ink)
 	
+	# 发射墨弹
+	emit_ink_projectile()
+	
 	# 笔颜色变淡
 	pen_color_intensity = max(0.3, pen_color_intensity - 0.1)
-	
-	# 发射墨弹
-	emit_student_ink_projectile()
 	
 	# 减少耐久
 	if "durability" in limbs["pen"]:
@@ -240,98 +334,246 @@ func use_pen():
 	# 更新纹理状态
 	update_sprite_based_on_game_logic()
 
-func emit_student_ink_projectile():
-	"""学生形态发射墨弹"""
-	print("学生发射墨弹")
+func emit_ink_projectile():
+	"""发射墨弹"""
+	if not projectile_manager:
+		print("错误: 抛射体管理器未初始化")
+		return
 	
-	# 创建墨弹实例
-	# 这里可以添加墨弹的具体实现
+	# 计算发射位置和方向
+	var spawn_position = global_position + Vector2(20 * facing_direction, -10)
+	var direction = Vector2(facing_direction, 0)
 	
+	# 墨弹参数
+	var ink_params = {
+		"ink_color": Color(0.1, 0.1, 0.3, 0.8),  # 深蓝色
+		"splash_size": 60.0,
+		"is_sticky": true,
+		"stick_duration": 3.0,
+		"damage": 15.0,
+		"splash_damage": 5.0,
+		"splash_radius": 80.0
+	}
+	
+	# 生成墨弹
+	var ink_projectile = projectile_manager.spawn_projectile("ink", spawn_position, direction, self, ink_params)
+	if ink_projectile:
+		ink_projectiles.append(ink_projectile)
+		
+		# 连接信号
+		ink_projectile.projectile_hit.connect(_on_ink_hit)
+		ink_projectile.projectile_destroyed.connect(_on_ink_destroyed.bind(ink_projectile))
+		
+		print("墨弹发射成功")
+
+func _on_ink_hit(target: Node, position: Vector2):
+	"""墨弹击中"""
+	print("墨弹击中: %s" % target.name)
+	
+	# 这里可以添加墨弹击中后的额外效果
 	if EventBus.instance:
-		EventBus.instance.debug_message.emit("学生发射墨弹", 1)
+		EventBus.instance.debug_message.emit("墨弹击中: " + target.name, 1)
+
+func _on_ink_destroyed(projectile):
+	"""墨弹销毁"""
+	if projectile in ink_projectiles:
+		ink_projectiles.erase(projectile)
 
 func use_shoes():
-	"""学生形态使用双鞋"""
-	print("学生使用双鞋")
+	"""学生形态使用双鞋 - 扔鞋"""
+	print("学生使用双鞋 - 扔鞋")
 	
 	# 检查鞋是否可用
-	var left_shoe_available = limbs["left_shoe"]["active"] and not limbs["left_shoe"]["thrown"]
-	var right_shoe_available = limbs["right_shoe"]["active"] and not limbs["right_shoe"]["thrown"]
+	var left_shoe_available = "active" in limbs["left_shoe"] and limbs["left_shoe"]["active"] and not ("thrown" in limbs["left_shoe"] and limbs["left_shoe"]["thrown"])
+	var right_shoe_available = "active" in limbs["right_shoe"] and limbs["right_shoe"]["active"] and not ("thrown" in limbs["right_shoe"] and limbs["right_shoe"]["thrown"])
 	
 	# 如果两只鞋都可用，两只都扔掉
 	if left_shoe_available and right_shoe_available:
-		# 标记两只鞋都扔掉
-		limbs["left_shoe"]["thrown"] = true
-		limbs["right_shoe"]["thrown"] = true
-		
-		if "left_shoe" not in shoes_thrown:
-			shoes_thrown.append("left_shoe")
-		if "right_shoe" not in shoes_thrown:
-			shoes_thrown.append("right_shoe")
-		
-		# 实际扔出鞋子
+		# 扔左鞋
 		throw_shoe("left_shoe")
+		
+		# 稍微延迟后扔右鞋
+		await get_tree().create_timer(0.2).timeout
 		throw_shoe("right_shoe")
 		
-		# 触发移速增加效果
-		apply_student_speed_boost()
-		
-		# 开始流血效果
-		start_student_bleed_effect()
-		
-		# 更新UI
-		update_ui()
-		
-		# 播放音效
-		play_student_shoe_throw_sound()
-		
-		# 切换到笔（因为鞋被扔掉了）
-		active_limb = "pen"
 	elif left_shoe_available or right_shoe_available:
 		# 只有一只鞋可用
 		var available_shoe = "left_shoe" if left_shoe_available else "right_shoe"
-		
-		# 标记鞋扔掉
-		limbs[available_shoe]["thrown"] = true
-		if available_shoe not in shoes_thrown:
-			shoes_thrown.append(available_shoe)
-		
-		# 实际扔出鞋子
 		throw_shoe(available_shoe)
-		
-		# 触发移速增加效果
-		apply_student_speed_boost()
-		
-		# 开始流血效果
-		start_student_bleed_effect()
-		
-		# 更新UI
-		update_ui()
-		
-		# 播放音效
-		play_student_shoe_throw_sound()
 	else:
 		print("没有可用的鞋")
 		return
+	
+	# 触发移速增加效果
+	apply_student_speed_boost()
+	
+	# 开始流血效果
+	start_student_bleed_effect()
+	
+	# 更新UI
+	update_ui()
+	
+	# 播放音效
+	play_student_shoe_throw_sound()
 	
 	# 更新纹理状态
 	update_sprite_based_on_game_logic()
 
 func throw_shoe(shoe_name: String):
-	"""实际扔出鞋子"""
-	print("扔出鞋子: %s" % shoe_name)
+	"""扔鞋"""
+	print("扔鞋: %s" % shoe_name)
 	
-	# 计算扔出方向
-	var throw_direction = Vector2(facing_direction, -0.3).normalized()
+	if not projectile_manager:
+		print("错误: 抛射体管理器未初始化")
+		return
 	
-	# 创建鞋子实例
-	# 这里可以添加鞋子的具体实现
+	# 检查鞋是否已经被扔掉
+	if "thrown" in limbs[shoe_name] and limbs[shoe_name]["thrown"]:
+		print("鞋已经被扔掉: %s" % shoe_name)
+		return
 	
-	# 更新肢体位置
-	limbs[shoe_name]["position"] = Vector2.ZERO
+	# 标记鞋已扔掉
+	limbs[shoe_name]["thrown"] = true
+	if shoe_name not in shoes_thrown:
+		shoes_thrown.append(shoe_name)
+	
+	# 播放音效
+	play_student_shoe_throw_sound()
+	
+	# 计算发射位置和方向
+	var y_offset = 10 if shoe_name == "left_shoe" else -10
+	var spawn_position = global_position + Vector2(0, y_offset)
+	
+	# 抛物线方向 - 向上弹
+	var throw_direction = Vector2(facing_direction, -0.8).normalized()  # 更陡峭的上抛
+	
+	# 鞋参数
+	var shoe_params = {
+		"shoe_name": shoe_name,
+		"throw_power": 1.2,  # 抛射力量
+		"damage": 20.0,
+		"bounce_count": 2,
+		"rotation_speed": 2.0,
+		"invincible_time": 0.5,  # 0.5秒无敌时间
+		"gravity": 600.0,  # 重力
+		"trail_color": Color(0.6, 0.4, 0.2, 0.8)  # 棕色轨迹
+	}
+	
+	# 生成鞋抛射体
+	var shoe_projectile = projectile_manager.spawn_projectile("shoe", spawn_position, throw_direction, self, shoe_params)
+	if shoe_projectile:
+		active_shoes.append(shoe_projectile)
+		
+		# 连接信号
+		shoe_projectile.projectile_hit.connect(_on_shoe_hit.bind(shoe_name))
+		shoe_projectile.projectile_destroyed.connect(_on_shoe_destroyed.bind(shoe_projectile))
+		shoe_projectile.projectile_recovered.connect(_on_shoe_recovered.bind(shoe_projectile, shoe_name))
+		shoe_projectile.projectile_landed.connect(_on_shoe_landed.bind(shoe_projectile, shoe_name))
+		
+		print("鞋发射成功: %s" % shoe_name)
+		
+		# 更新纹理状态
+		update_sprite_based_on_game_logic()
+	else:
+		print("鞋发射失败: %s" % shoe_name)
+		# 重置状态
+		limbs[shoe_name]["thrown"] = false
+		if shoe_name in shoes_thrown:
+			shoes_thrown.erase(shoe_name)
+
+func _on_shoe_hit(target: Node, position: Vector2, shoe_name: String):
+	"""鞋击中目标"""
+	print("鞋击中目标: %s, 鞋: %s, 位置: %s" % [target.name, shoe_name, position])
 	
 	if EventBus.instance:
-		EventBus.instance.debug_message.emit("扔出鞋子: " + shoe_name, 1)
+		EventBus.instance.debug_message.emit("鞋击中: " + shoe_name, 1)
+
+func _on_shoe_landed(projectile, shoe_name: String, position: Vector2):
+	"""鞋落地"""
+	print("鞋落地: %s, 位置: %s" % [shoe_name, position])
+	
+	if EventBus.instance:
+		EventBus.instance.debug_message.emit("鞋落地: " + shoe_name, 1)
+	
+	# 从活动鞋列表中移除
+	if projectile in active_shoes:
+		active_shoes.erase(projectile)
+
+func _on_shoe_destroyed(projectile):
+	"""鞋销毁"""
+	if projectile in active_shoes:
+		active_shoes.erase(projectile)
+
+func _on_shoe_recovered(projectile, shoe_name: String):
+	"""鞋回收"""
+	print("鞋回收: %s" % shoe_name)
+	
+	# 从活动列表移除
+	if projectile in active_shoes:
+		active_shoes.erase(projectile)
+	
+	# 标记鞋已回收
+	limbs[shoe_name]["thrown"] = false
+	if shoe_name in shoes_thrown:
+		shoes_thrown.erase(shoe_name)
+	
+	# 恢复耐久
+	if "durability" in limbs[shoe_name]:
+		limbs[shoe_name]["durability"] = 100.0
+	
+	# 更新纹理状态
+	update_sprite_based_on_game_logic()
+
+func pickup_shoe(shoe_name: String, projectile) -> bool:
+	"""拾取鞋"""
+	print("学生尝试拾取鞋: %s" % shoe_name)
+	
+	# 检查是否是学生的鞋
+	if shoe_name in ["left_shoe", "right_shoe"]:
+		# 检查鞋是否被扔掉
+		if "thrown" in limbs[shoe_name] and limbs[shoe_name]["thrown"]:
+			print("拾取成功: %s" % shoe_name)
+			
+			# 标记鞋已回收
+			limbs[shoe_name]["thrown"] = false
+			if shoe_name in shoes_thrown:
+				shoes_thrown.erase(shoe_name)
+			
+			# 恢复耐久
+			if "durability" in limbs[shoe_name]:
+				limbs[shoe_name]["durability"] = 100.0
+			
+			# 从活动鞋列表中移除
+			if projectile in active_shoes:
+				active_shoes.erase(projectile)
+			
+			# 更新纹理状态
+			update_sprite_based_on_game_logic()
+			
+			# 播放拾取音效
+			play_shoe_pickup_sound()
+			
+			# 发送事件
+			if EventBus.instance:
+				EventBus.instance.shoe_picked_up.emit(shoe_name, global_position)
+			
+			return true
+		else:
+			print("鞋没有被扔掉: %s" % shoe_name)
+	else:
+		print("不是学生的鞋: %s" % shoe_name)
+	
+	return false
+
+func play_shoe_pickup_sound():
+	"""播放拾取鞋音效"""
+	if AudioManager.instance:
+		var sound_path = "res://assets/audio/sfx/characters/student/shoe_pickup.ogg"
+		if FileAccess.file_exists(sound_path):
+			AudioManager.instance.play_sfx(sound_path)
+		else:
+			print("警告: 拾取鞋音效文件不存在: %s" % sound_path)
+
 
 func apply_student_speed_boost():
 	"""学生形态应用速度提升"""
@@ -383,11 +625,14 @@ func recover_limbs():
 	
 	# 恢复耐久
 	for limb in limbs:
-		if limb != "book" and "durability" in limbs[limb]:
+		if "durability" in limbs[limb]:
 			limbs[limb]["durability"] = 100.0
 	
 	# 更新纹理状态
 	update_sprite_based_on_game_logic()
+	
+	# 回收所有抛射体
+	recover_all_projectiles()
 	
 	# 播放回收音效
 	play_student_recover_sound()
@@ -404,14 +649,29 @@ func recover_student_ink():
 func recover_student_shoes():
 	"""学生形态回收鞋"""
 	for shoe in ["left_shoe", "right_shoe"]:
-		if limbs[shoe]["thrown"]:
+		if "thrown" in limbs[shoe]:
 			limbs[shoe]["thrown"] = false
-			if "durability" in limbs[shoe]:
-				limbs[shoe]["durability"] = 100.0
 	
 	shoes_thrown.clear()
 	
 	print("学生回收鞋子")
+
+func recover_all_projectiles():
+	"""回收所有抛射体"""
+	print("回收所有抛射体")
+	
+	# 回收所有鞋
+	for shoe in active_shoes.duplicate():
+		if is_instance_valid(shoe):
+			shoe.recover()
+	
+	# 销毁所有墨弹
+	for ink in ink_projectiles.duplicate():
+		if is_instance_valid(ink):
+			ink.queue_free()
+	
+	active_shoes.clear()
+	ink_projectiles.clear()
 
 func end_bleeding_effect():
 	"""结束流血效果"""

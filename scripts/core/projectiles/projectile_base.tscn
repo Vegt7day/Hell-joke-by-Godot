@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://cwcdy6cdfxkko"]
+
+[ext_resource type="Script" uid="uid://c6ywcpdeqgikq" path="res://scripts/core/projectiles/projectile_base.gd" id="1_yyrli"]
+
+[sub_resource type="PlaceholderTexture2D" id="PlaceholderTexture2D_7o3a5"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_nsvdw"]
+size = Vector2(58, 54.25)
+
+[node name="projectile_base" type="Area2D" unique_id=1752467600]
+script = ExtResource("1_yyrli")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=238013885]
+position = Vector2(0, 9.536743e-07)
+scale = Vector2(58, 54.000004)
+texture = SubResource("PlaceholderTexture2D_7o3a5")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1123568238]
+shape = SubResource("RectangleShape2D_nsvdw")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=543951566]
+
+[node name="CPUParticles2D" type="CPUParticles2D" parent="." unique_id=179103400]

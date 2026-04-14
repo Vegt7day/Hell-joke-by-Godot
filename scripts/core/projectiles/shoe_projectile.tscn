@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://ce0a3agfo6ehd"]
+
+[ext_resource type="PackedScene" uid="uid://cwcdy6cdfxkko" path="res://scripts/core/projectiles/projectile_base.tscn" id="1_sjde8"]
+[ext_resource type="Script" uid="uid://0rqo3lkftcgl" path="res://scripts/core/projectiles/shoe_projectile.gd" id="2_y6hsc"]
+
+[node name="shoe_projectile" unique_id=1752467600 instance=ExtResource("1_sjde8")]
+script = ExtResource("2_y6hsc")

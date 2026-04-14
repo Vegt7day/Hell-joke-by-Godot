@@ -27,6 +27,7 @@ InputManager="*uid://cls55kuscw5d5"
 LevelManager="*uid://bmdl42hndpik7"
 SaveManager="*uid://bwlfvk4fnmo5o"
 UiManager="*uid://b8w16fqfsefbs"
+ProjectileManager="*uid://evnwb6of30lx"
 
 [display]
 
