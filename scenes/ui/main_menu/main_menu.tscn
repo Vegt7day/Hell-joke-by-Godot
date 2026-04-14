@@ -1,0 +1,73 @@
+[gd_scene format=3 uid="uid://dkvjegbadf23a"]
+
+[ext_resource type="Script" uid="uid://cuu1ar1omvgpv" path="res://scenes/ui/main_menu/main_menu.gd" id="1_1ch07"]
+
+[node name="MainMenu" type="Control" unique_id=1916053952]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_1ch07")
+
+[node name="Background" type="ColorRect" parent="." unique_id=1116493929]
+clip_contents = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.046584845, 0.04286755, 0.07591119, 1)
+
+[node name="MenuContainer" type="VBoxContainer" parent="." unique_id=1217661658]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -200.0
+offset_right = 250.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="MenuContainer" unique_id=1412136263]
+layout_mode = 2
+theme_override_font_sizes/font_size = 60
+text = "逃离文字地狱"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NewGameButton" type="Button" parent="MenuContainer" unique_id=391313814]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "新游戏"
+icon_alignment = 1
+
+[node name="ContinueButton" type="Button" parent="MenuContainer" unique_id=2130124777]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "继续游戏"
+icon_alignment = 1
+
+[node name="SettingsButton" type="Button" parent="MenuContainer" unique_id=2073702850]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "设置"
+icon_alignment = 1
+
+[node name="QuitButton" type="Button" parent="MenuContainer" unique_id=516796752]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "退出游戏"
+icon_alignment = 1
+
+[node name="VersionLabel" type="Label" parent="MenuContainer" unique_id=1269875452]
+layout_mode = 2
+text = "v1.0.0 Alpha"

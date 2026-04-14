@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://chumswr5rreap"]
+
+[ext_resource type="Script" uid="uid://dpqi4rxlhcvj8" path="res://scenes/system/main.gd" id="1_e8ww3"]
+
+[node name="Main" type="Node" unique_id=1987489810]
+script = ExtResource("1_e8ww3")
+
+[node name="World" type="Node2D" parent="." unique_id=1383289046]
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=703434492]
+layer = 10
+
+[node name="Effects" type="Node2D" parent="." unique_id=529079504]

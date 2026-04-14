@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://dr6cfgcs3dhc2"]
+
+[ext_resource type="Script" uid="uid://dk3ci6drkabbq" path="res://scenes/actors/player/student/student.gd" id="1_7jsl3"]
+
+[node name="Student" type="Node2D" unique_id=2049747521]
+script = ExtResource("1_7jsl3")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1793774156]
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=939642747]
