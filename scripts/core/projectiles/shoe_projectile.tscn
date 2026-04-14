@@ -3,7 +3,12 @@
 [ext_resource type="PackedScene" uid="uid://cwcdy6cdfxkko" path="res://scripts/core/projectiles/projectile_base.tscn" id="1_sjde8"]
 [ext_resource type="Script" uid="uid://0rqo3lkftcgl" path="res://scripts/core/projectiles/shoe_projectile.gd" id="2_y6hsc"]
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_sjde8"]
+size = Vector2(36, 36)
+
 [node name="shoe_projectile" unique_id=1752467600 instance=ExtResource("1_sjde8")]
+collision_layer = 8
+collision_mask = 128
 script = ExtResource("2_y6hsc")
 upward_speed = 400.0
 gravity_strength = 600.0
@@ -13,3 +18,10 @@ bounce_height = 100.0
 
 [node name="CPUParticles2D" parent="." index="3" unique_id=179103400]
 emitting = false
+
+[node name="Area2D" type="Area2D" parent="." index="4" unique_id=900453958]
+collision_layer = 8
+collision_mask = 128
+
+[node name="PickupArea" type="CollisionShape2D" parent="Area2D" index="0" unique_id=795009598]
+shape = SubResource("RectangleShape2D_sjde8")

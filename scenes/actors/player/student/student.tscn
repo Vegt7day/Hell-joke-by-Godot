@@ -4,14 +4,24 @@
 [ext_resource type="PackedScene" uid="uid://cb407dgeevufa" path="res://scenes/actors/player/base/player_base.tscn" id="1_etu71"]
 [ext_resource type="Texture2D" uid="uid://81fnbmadhs47" path="res://assets/graphics/characters/student/student_state_02.png" id="3_xr5g5"]
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_cdntt"]
+size = Vector2(118, 158)
+
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_xr5g5"]
 size = Vector2(118, 158)
 
 [node name="Student" unique_id=571628808 instance=ExtResource("1_etu71")]
 script = ExtResource("1_7jsl3")
 
-[node name="Sprite" parent="." index="0" unique_id=649957663]
+[node name="PickupArea" type="Area2D" parent="." index="0" unique_id=1115911381]
+collision_layer = 128
+collision_mask = 8
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PickupArea" index="0" unique_id=1170669352]
+shape = SubResource("RectangleShape2D_cdntt")
+
+[node name="Sprite" parent="." index="1" unique_id=649957663]
 texture = ExtResource("3_xr5g5")
 
-[node name="CollisionShape" parent="." index="2" unique_id=1110341349]
+[node name="CollisionShape" parent="." index="3" unique_id=1110341349]
 shape = SubResource("RectangleShape2D_xr5g5")

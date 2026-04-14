@@ -7,22 +7,34 @@ class_name Student
 var pen_color_intensity: float = 1.0
 var shoes_thrown: Array[String] = []
 
+# 捡鞋冷却相关
+var shoe_pickup_cooldown: float = 0.5  # 与鞋抛射体的 invincible_time 一致
+var last_shoe_pickup_time: Dictionary = {}  # 记录每只鞋最后拾取时间
+var shoe_pickup_ready: Dictionary = {}  # 记录每只鞋是否可以拾取
+
 # 学生图片状态枚举
 enum StudentSpriteState {
-	SHOES_SELECTED_LOW_INK = 1, # 鞋被选择（绿色），笔未选择且缺墨（灰色）
-	SHOES_SELECTED = 2,         # 鞋被选择（绿色），笔未选择（白色）
-	DOUBLE_FOOT_WHITE_PEN_LOW = 3,  # 双脚绿，笔白	
-	DOUBLE_FOOT_GREEN = 4,      # 双脚绿（鞋被扔掉），笔灰
-	PEN_SELECTED = 5,           # 笔被选择（绿色），鞋未选择（白色）	
-	DOUBLE_FOOT_WHITE = 6,      # 双脚白（鞋被扔掉），笔绿
-	DOUBLE_FOOT_GREEN_PEN_LOW = 7,  # 双脚白，笔灰绿
-	PEN_SELECTED_LOW_INK = 8,   # 笔被选择但缺墨（灰绿色），鞋未选择（白色）
+SHOES_SELECTED_LOW_INK = 1, # 鞋被选择（绿色），笔未选择且缺墨（灰色）
+SHOES_SELECTED = 2,         # 鞋被选择（绿色），笔未选择（白色）
+DOUBLE_FOOT_WHITE_PEN_LOW = 3,  # 双脚绿，笔白    
+DOUBLE_FOOT_GREEN = 4,      # 双脚绿（鞋被扔掉），笔灰
+PEN_SELECTED = 5,           # 笔被选择（绿色），鞋未选择（白色）    
+DOUBLE_FOOT_WHITE = 6,      # 双脚白（鞋被扔掉），笔绿
+DOUBLE_FOOT_GREEN_PEN_LOW = 7,  # 双脚白，笔灰绿
+PEN_SELECTED_LOW_INK = 8,   # 笔被选择但缺墨（灰绿色），鞋未选择（白色）
 }
 
 # 抛射体相关属性
 var projectile_manager: Node
 var active_shoes: Array = []
 var ink_projectiles: Array = []
+
+# 回收相关属性
+var is_recovering: bool = false
+var recover_delay: float = 0.6  # 回收延迟时间
+var recover_timer: float = 0.0
+var recover_start_time: float = 0.0
+
 
 var current_sprite_state = StudentSpriteState.PEN_SELECTED
 var animation_timer: float = 0.0
@@ -32,26 +44,169 @@ var last_facing_direction: float = 1.0  # 1=右，-1=左
 
 func _ready():
 	print("学生形态初始化: %s" % name)
-	
+
 	# 调用父类初始化
 	super._ready()
-	
+
 	# 确保Sprite不会被翻转
 	if sprite:
 		sprite.scale.x = abs(sprite.scale.x)  # 确保x缩放为正
 		sprite.flip_h = false  # 确保不水平翻转
-	
+
 	# 设置初始纹理
 	update_student_sprite()
-	
+
 	# 初始化学生特有属性
 	setup_student_limbs()
-	
+
 	# 初始化抛射体管理器
 	setup_projectile_manager()
-	
+	setup_collision_and_signals()
+
+	# 初始化鞋拾取冷却
+	init_shoe_pickup_cooldown()
+	init_shoe_pickup_cooldown()
 	print("学生形态初始化完成")
 
+func init_shoe_pickup_cooldown():
+	"""初始化鞋拾取冷却"""
+	print("初始化鞋拾取冷却")
+	
+	# 为左右鞋初始化冷却状态
+	for shoe_name in ["left_shoe", "right_shoe"]:
+		last_shoe_pickup_time[shoe_name] = 0.0
+		shoe_pickup_ready[shoe_name] = true
+	
+	print("鞋拾取冷却初始化完成: %s" % shoe_pickup_ready)
+
+func setup_collision_and_signals():
+	"""设置碰撞和信号"""
+	print("设置学生碰撞和信号")
+	
+	# 查找PickupArea节点
+	var pickup_area = get_node_or_null("PickupArea")
+	if pickup_area:
+		print("找到学生PickupArea节点")
+		# 设置碰撞层和掩码
+		pickup_area.set_collision_layer_value(8, true)   # 第8层：玩家
+		pickup_area.set_collision_mask_value(4, true)    # 第4层：拾取
+		
+		print("学生PickupArea碰撞层: %s, 碰撞掩码: %s" % [pickup_area.collision_layer, pickup_area.collision_mask])
+		
+		# 连接信号
+		pickup_area.area_entered.connect(_on_student_area_entered)
+		pickup_area.body_entered.connect(_on_student_body_entered)
+		
+		print("学生拾取信号已连接")
+	else:
+		print("警告: 学生没有PickupArea节点")
+
+func _on_student_area_entered(area: Area2D):
+	"""学生区域进入"""
+	print("学生区域进入: %s (%s)" % [area.name, area.get_class()])
+	
+	# 检查是否是鞋抛射体
+	if area and "shoe_owner" in area:
+		print("检测到鞋抛射体 (通过shoe_owner属性)")
+		# 尝试拾取
+		_try_pickup_shoe(area)
+	else:
+		print("不是鞋抛射体: %s" % area.get_class())
+
+func _input(event):
+	"""处理输入"""
+
+	# 检查是否有鞋子需要回收
+	if event.is_action_pressed("recover"):
+		# 检查是否有鞋子需要回收
+		if active_shoes.size() > 0 and not is_recovering:
+			print("按下R键，开始回收延迟")
+			start_recover_delay()
+		else:
+			# 如果没有鞋子，使用原来的恢复逻辑
+			if not is_recovering:
+				recover_limbs()
+
+func start_recover_delay():
+	"""开始回收延迟"""
+	print("开始回收延迟: %.2f秒" % recover_delay)
+	
+	# 设置回收状态
+	is_recovering = true
+	recover_timer = 0.0
+	recover_start_time = Time.get_unix_time_from_system()
+	
+	# 播放回收音效
+	play_student_recover_sound()
+	
+	# 更新纹理状态
+	update_sprite_based_on_game_logic()
+	
+	# 禁用输入，防止重复触发
+	set_process_input(false)
+	
+	print("回收延迟开始，等待 %.2f 秒" % recover_delay)
+
+
+func _try_pickup_shoe(shoe):
+	"""尝试拾取鞋子"""
+	if not shoe or not shoe.can_be_picked_up:
+		print("鞋子还不能被拾取（鞋子无敌时间）")
+		return
+	
+	# 获取鞋子的所有者信息
+	var shoe_name = shoe.shoe_owner
+	print("尝试拾取鞋子: %s" % shoe_name)
+	
+	# 检查学生是否在拾取冷却中
+	if not is_shoe_pickup_ready(shoe_name):
+		var remaining_time = get_shoe_pickup_cooldown_remaining(shoe_name)
+		print("学生拾取冷却中，还需等待: %.2f秒" % remaining_time)
+		return
+	
+	# 调用pickup_shoe方法
+	if pickup_shoe(shoe_name, shoe):
+		print("拾取成功: %s" % shoe_name)
+		# 开始拾取冷却
+		start_shoe_pickup_cooldown(shoe_name)
+	else:
+		print("拾取失败")
+
+func is_shoe_pickup_ready(shoe_name: String) -> bool:
+	"""检查鞋子是否可以拾取"""
+	if shoe_name not in shoe_pickup_ready:
+		return true
+	
+	return shoe_pickup_ready[shoe_name]
+
+func get_shoe_pickup_cooldown_remaining(shoe_name: String) -> float:
+	"""获取拾取冷却剩余时间"""
+	if shoe_name not in last_shoe_pickup_time:
+		return 0.0
+	
+	var current_time = Time.get_ticks_msec() / 1000.0
+	var elapsed = current_time - last_shoe_pickup_time[shoe_name]
+	var remaining = max(0, shoe_pickup_cooldown - elapsed)
+	
+	return remaining
+
+func start_shoe_pickup_cooldown(shoe_name: String):
+	"""开始拾取冷却"""
+	print("开始拾取冷却: %s" % shoe_name)
+		
+	# 记录当前时间
+	last_shoe_pickup_time[shoe_name] = Time.get_ticks_msec() / 1000.0
+	shoe_pickup_ready[shoe_name] = false
+	
+	# 设置一个定时器，冷却结束后恢复
+	await get_tree().create_timer(shoe_pickup_cooldown).timeout
+	shoe_pickup_ready[shoe_name] = true
+	
+	print("拾取冷却结束: %s" % shoe_name)
+
+func _on_student_body_entered(body: PhysicsBody2D):
+	"""学生物理体进入"""
+	print("学生物理体进入: %s (%s)" % [body.name, body.get_class()])
 func setup_student_limbs():
 	"""初始化学生肢体"""
 	print("设置学生肢体")
@@ -245,7 +400,30 @@ func _physics_process(delta: float):
 	
 	# 根据游戏逻辑更新纹理状态
 	update_sprite_based_on_game_logic()
+		# 更新回收计时器
+	if is_recovering:
+		recover_timer += delta
+		if recover_timer >= recover_delay:
+			# 延迟结束，开始实际回收
+			recover_timer = 0.0
+			is_recovering = false
+			start_shoe_recovery_animation()
 
+func start_shoe_recovery_animation():
+	"""开始鞋子回收动画"""
+	print("回收延迟结束，开始回收动画")
+	
+	# 调用回收所有抛射体（有动画效果）
+	recover_all_projectiles()
+	
+	# 更新纹理状态
+	update_sprite_based_on_game_logic()
+	
+	# 重新启用输入
+	set_process_input(true)
+	
+	print("回收动画开始")
+		
 func update_sprite_based_on_game_logic():
 	"""根据游戏逻辑更新纹理状态"""
 	# 检查鞋是否被扔掉
@@ -254,23 +432,21 @@ func update_sprite_based_on_game_logic():
 	var both_shoes_thrown = left_shoe_thrown and right_shoe_thrown
 	
 	# 检查笔的墨水状态
-	var pen_has_ink = ink > 20  # 墨水大于20%为有墨
-	var pen_low_ink = ink <= 20 and ink > 0  # 墨水0-20%为缺墨
+	var pen_has_ink = ink > 0  # 墨水大于20%为有墨
 	var pen_no_ink = ink <= 0  # 墨水为0
-	
 	# 如果双鞋都被扔掉，进入脚模式
 	if both_shoes_thrown:
 		# 脚模式
 		if active_limb == "pen":
 			# 笔被选择
-			if pen_low_ink or pen_no_ink:
+			if pen_no_ink:
 				set_sprite_state(StudentSpriteState.DOUBLE_FOOT_WHITE_PEN_LOW)  # 双脚白，笔灰绿
 			else:
 				set_sprite_state(StudentSpriteState.DOUBLE_FOOT_WHITE)  # 双脚白，笔绿
 		else:
 			# 鞋被选择（在脚模式下，鞋不能再被选择，强制选择笔）
 			active_limb = "pen"
-			if pen_low_ink or pen_no_ink:
+			if pen_no_ink:
 				set_sprite_state(StudentSpriteState.DOUBLE_FOOT_GREEN_PEN_LOW)  # 双脚绿，笔白
 			else:
 				set_sprite_state(StudentSpriteState.DOUBLE_FOOT_GREEN)  # 双脚绿，笔灰
@@ -278,13 +454,13 @@ func update_sprite_based_on_game_logic():
 		# 鞋模式
 		if active_limb == "pen":
 			# 笔被选择
-			if pen_low_ink or pen_no_ink:
+			if pen_no_ink:
 				set_sprite_state(StudentSpriteState.PEN_SELECTED_LOW_INK)  # 笔灰绿，鞋白
 			else:
 				set_sprite_state(StudentSpriteState.PEN_SELECTED)  # 笔绿，鞋白
 		else:
 			# 鞋被选择
-			if pen_low_ink or pen_no_ink:
+			if pen_no_ink:
 				set_sprite_state(StudentSpriteState.SHOES_SELECTED_LOW_INK)  # 鞋绿，笔白
 			else:
 				set_sprite_state(StudentSpriteState.SHOES_SELECTED)  # 鞋绿，笔灰
@@ -300,7 +476,7 @@ func use_pen():
 	print("学生使用笔 - 发射墨弹")
 	
 	# 检查墨水是否足够
-	var ink_cost = 8.0
+	var ink_cost = 100
 	if ink < ink_cost:
 		print("墨水不足，无法使用笔")
 		play_empty_ink_sound()
@@ -418,6 +594,7 @@ func use_shoes():
 	
 	# 更新纹理状态
 	update_sprite_based_on_game_logic()
+
 func throw_shoe(shoe_name: String):
 	"""扔鞋"""
 	print("扔鞋: %s" % shoe_name)
@@ -465,7 +642,7 @@ func throw_shoe(shoe_name: String):
 		
 		# 连接信号
 		shoe_projectile.projectile_landed.connect(_on_shoe_landed.bind(shoe_projectile, shoe_name))
-		shoe_projectile.projectile_recovered.connect(_on_shoe_recovered.bind(shoe_projectile, shoe_name))
+		#shoe_projectile.projectile_recovered.connect(_on_shoe_recovered.bind(shoe_projectile, shoe_name))
 		
 		print("鞋发射成功: %s" % shoe_name)
 		
@@ -477,7 +654,6 @@ func throw_shoe(shoe_name: String):
 		limbs[shoe_name]["thrown"] = false
 		if shoe_name in shoes_thrown:
 			shoes_thrown.erase(shoe_name)
-			
 			
 func _on_shoe_hit(target: Node, position: Vector2, shoe_name: String):
 	"""鞋击中目标"""
@@ -502,26 +678,6 @@ func _on_shoe_destroyed(projectile):
 	if projectile in active_shoes:
 		active_shoes.erase(projectile)
 
-func _on_shoe_recovered(projectile, shoe_name: String):
-	"""鞋回收"""
-	print("鞋回收: %s" % shoe_name)
-	
-	# 从活动列表移除
-	if projectile in active_shoes:
-		active_shoes.erase(projectile)
-	
-	# 标记鞋已回收
-	limbs[shoe_name]["thrown"] = false
-	if shoe_name in shoes_thrown:
-		shoes_thrown.erase(shoe_name)
-	
-	# 恢复耐久
-	if "durability" in limbs[shoe_name]:
-		limbs[shoe_name]["durability"] = 100.0
-	
-	# 更新纹理状态
-	update_sprite_based_on_game_logic()
-
 func pickup_shoe(shoe_name: String, projectile) -> bool:
 	"""拾取鞋"""
 	print("学生尝试拾取鞋: %s" % shoe_name)
@@ -532,7 +688,7 @@ func pickup_shoe(shoe_name: String, projectile) -> bool:
 		if "thrown" in limbs[shoe_name] and limbs[shoe_name]["thrown"]:
 			print("拾取成功: %s" % shoe_name)
 			
-			# 标记鞋已回收
+			# 标记当前鞋子已回收
 			limbs[shoe_name]["thrown"] = false
 			if shoe_name in shoes_thrown:
 				shoes_thrown.erase(shoe_name)
@@ -541,19 +697,31 @@ func pickup_shoe(shoe_name: String, projectile) -> bool:
 			if "durability" in limbs[shoe_name]:
 				limbs[shoe_name]["durability"] = 100.0
 			
-			# 从活动鞋列表中移除
+			# 从活动鞋列表中移除当前鞋子
 			if projectile in active_shoes:
 				active_shoes.erase(projectile)
 			
-			# 更新纹理状态
+			# 重要：调用鞋子的回收方法！
+			if projectile and projectile.has_method("recover_to_owner"):
+				print("开始回收鞋子动画: %s" % shoe_name)
+				projectile.recover_to_owner(self, 0.3)  # 0.3秒回收动画
+			else:
+				print("警告：鞋子没有recover_to_owner方法，直接销毁")
+				if is_instance_valid(projectile):
+					projectile.queue_free()
+			
+			# 1. 查找并回收另一只鞋子
+			recover_other_shoe(shoe_name)
+			
+			# 2. 更新纹理状态
 			update_sprite_based_on_game_logic()
 			
-			# 播放拾取音效
+			# 3. 播放拾取音效
 			play_shoe_pickup_sound()
 			
-			# 发送事件
+			# 4. 发送事件
 			if EventBus.instance:
-				EventBus.instance.shoe_picked_up.emit(shoe_name, global_position)
+				EventBus.instance.shoe_picked_up.emit(shoe_name, global_position, self)
 			
 			return true
 		else:
@@ -563,6 +731,64 @@ func pickup_shoe(shoe_name: String, projectile) -> bool:
 	
 	return false
 
+func recover_other_shoe(picked_up_shoe_name: String):
+	"""回收另一只鞋子"""
+	print("开始回收另一只鞋子，当前拾取: %s" % picked_up_shoe_name)
+	
+	# 确定另一只鞋子的名称
+	var other_shoe_name = ""
+	if picked_up_shoe_name == "left_shoe":
+		other_shoe_name = "right_shoe"
+	elif picked_up_shoe_name == "right_shoe":
+		other_shoe_name = "left_shoe"
+	else:
+		print("无效的鞋子名称: %s" % picked_up_shoe_name)
+		return
+	
+	print("需要回收的另一只鞋: %s" % other_shoe_name)
+	
+	# 检查另一只鞋子是否被扔掉
+	if not ("thrown" in limbs[other_shoe_name] and limbs[other_shoe_name]["thrown"]):
+		print("另一只鞋没有被扔掉: %s" % other_shoe_name)
+		return
+	
+	# 在active_shoes中查找另一只鞋子
+	var other_shoe_projectile = null
+	for shoe in active_shoes:
+		if is_instance_valid(shoe) and "shoe_owner" in shoe and shoe.shoe_owner == other_shoe_name:
+			other_shoe_projectile = shoe
+			break
+	
+	if other_shoe_projectile:
+		print("找到另一只鞋子对象: %s" % other_shoe_name)
+		
+		# 标记另一只鞋子已回收
+		limbs[other_shoe_name]["thrown"] = false
+		if other_shoe_name in shoes_thrown:
+			shoes_thrown.erase(other_shoe_name)
+		
+		# 从活动鞋列表中移除
+		if other_shoe_projectile in active_shoes:
+			active_shoes.erase(other_shoe_projectile)
+		
+		# 恢复耐久
+		if "durability" in limbs[other_shoe_name]:
+			limbs[other_shoe_name]["durability"] = 100.0
+		
+		# 调用另一只鞋子的回收方法
+		if other_shoe_projectile.has_method("recover_to_owner"):
+			print("开始回收另一只鞋子动画: %s" % other_shoe_name)
+			# 稍微延迟一下，让两只鞋子的回收动画有先后顺序
+			await get_tree().create_timer(0.2).timeout
+			other_shoe_projectile.recover_to_owner(self, 0.3)
+		else:
+			print("警告：另一只鞋子没有recover_to_owner方法，直接销毁")
+			if is_instance_valid(other_shoe_projectile):
+				other_shoe_projectile.queue_free()
+		
+		print("成功回收另一只鞋子: %s" % other_shoe_name)
+	else:
+		print("未找到另一只鞋子的对象: %s" % other_shoe_name)
 func play_shoe_pickup_sound():
 	"""播放拾取鞋音效"""
 	if AudioManager.instance:
@@ -571,7 +797,6 @@ func play_shoe_pickup_sound():
 			AudioManager.instance.play_sfx(sound_path)
 		else:
 			print("警告: 拾取鞋音效文件不存在: %s" % sound_path)
-
 
 func apply_student_speed_boost():
 	"""学生形态应用速度提升"""
@@ -653,24 +878,73 @@ func recover_student_shoes():
 	shoes_thrown.clear()
 	
 	print("学生回收鞋子")
-
 func recover_all_projectiles():
-	"""回收所有抛射体"""
-	print("回收所有抛射体")
+	"""回收所有抛射体 - 有动画效果"""
+	print("回收所有抛射体（动画效果）")
 	
-	# 回收所有鞋
+	var shoes_recovering = []
+	
+	# 收集所有需要回收的鞋子
 	for shoe in active_shoes.duplicate():
-		if is_instance_valid(shoe):
-			shoe.recover()
+		if is_instance_valid(shoe) and shoe.has_method("recover_to_owner"):
+			shoes_recovering.append(shoe)
 	
+	# 按鞋子的y位置排序（上方的先回收）
+	shoes_recovering.sort_custom(func(a, b): return a.global_position.y < b.global_position.y)
+	
+	# 逐个回收鞋子
+	for i in range(shoes_recovering.size()):
+		var shoe = shoes_recovering[i]
+		if is_instance_valid(shoe):
+			# 添加顺序延迟，让鞋子依次回收
+			await get_tree().create_timer(i * 0.1).timeout
+			if is_instance_valid(shoe) and shoe.has_method("recover_to_owner"):
+				shoe.recover_to_owner(self, 0.3)
 	# 销毁所有墨弹
 	for ink in ink_projectiles.duplicate():
 		if is_instance_valid(ink):
 			ink.queue_free()
-	
+	# 清空列表
 	active_shoes.clear()
 	ink_projectiles.clear()
+	
+	# 延迟一段时间，确保动画完成
+	await get_tree().create_timer(0.5).timeout
+	
+	# 标记鞋已回收
+	recover_student_shoes()
 
+func recover_shoe(shoe_name: String, projectile):
+	"""从外部触发鞋子回收（被另一只鞋子触发）"""
+	print("外部触发鞋子回收: %s" % shoe_name)
+	
+	# 检查鞋子是否被扔掉
+	if "thrown" in limbs[shoe_name] and limbs[shoe_name]["thrown"]:
+		print("外部触发回收鞋子: %s" % shoe_name)
+		
+		# 标记鞋子已回收
+		limbs[shoe_name]["thrown"] = false
+		if shoe_name in shoes_thrown:
+			shoes_thrown.erase(shoe_name)
+		
+		# 从活动鞋列表中移除
+		if projectile in active_shoes:
+			active_shoes.erase(projectile)
+		
+		# 恢复耐久
+		if "durability" in limbs[shoe_name]:
+			limbs[shoe_name]["durability"] = 100.0
+		
+		# 调用鞋子的回收方法
+		if projectile and projectile.has_method("recover_to_owner"):
+			print("外部触发开始回收鞋子动画: %s" % shoe_name)
+			projectile.recover_to_owner(self, 0.4)  # 稍长时间，有先后顺序
+		else:
+			print("警告：外部触发回收鞋子没有recover_to_owner方法")
+			if is_instance_valid(projectile):
+				projectile.queue_free()
+		# 更新纹理状态
+		update_sprite_based_on_game_logic()
 func end_bleeding_effect():
 	"""结束流血效果"""
 	print("结束流血效果")

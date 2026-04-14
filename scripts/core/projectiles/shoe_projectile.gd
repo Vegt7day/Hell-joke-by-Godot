@@ -23,8 +23,6 @@ var invincible_timer: float = 0.0
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
 @onready var animation_player: AnimationPlayer = $AnimationPlayer
-@onready var pickup_area: Area2D = $PickupArea
-@onready var pickup_shape: CollisionShape2D = $PickupArea/CollisionShape2D
 @onready var light_2d: Light2D = $Light2D
 
 # 内部属性
@@ -37,24 +35,15 @@ var return_duration: float = 1.0  # 返回过程持续时间
 func _ready():
 	set_active(false)
 	
-	# 连接信号
-	area_entered.connect(_on_area_entered)
-	body_entered.connect(_on_body_entered)
-	
-	# 拾取区域信号
-	if pickup_area:
-		pickup_area.area_entered.connect(_on_pickup_area_entered)
-		pickup_area.body_entered.connect(_on_pickup_body_entered)
-		pickup_area.monitoring = false
-		pickup_area.monitorable = false
-		if pickup_shape:
-			pickup_shape.disabled = true
+	# 设置碰撞层和掩码
+	self.set_collision_layer_value(4, true)   # 第4层：拾取
+	self.set_collision_mask_value(1, true)    # 基本碰撞检测
 	
 	# 灯光
 	if light_2d:
 		light_2d.visible = false
 	
-	print("鞋抛射体初始化完成")
+	print("鞋抛射体初始化完成 (精简版)")
 
 func _physics_process(delta: float):
 	if not is_active or has_landed:
@@ -160,24 +149,6 @@ func setup_shoe(start_position: Vector2, move_direction: Vector2, owner: Node, s
 	print("鞋抛射体设置完成: 所有者=%s, 起始位置=%s" % [shoe_name, start_position])
 	return self
 
-func _on_area_entered(area: Area2D):
-	"""与区域碰撞"""
-	if not is_active or has_landed:
-		return
-	
-	print("鞋抛射体与区域碰撞: %s" % area.name)
-	
-	# 这里不处理碰撞，因为我们是垂直运动
-
-func _on_body_entered(body: PhysicsBody2D):
-	"""与物理体碰撞"""
-	if not is_active or has_landed:
-		return
-	
-	print("鞋抛射体与物体碰撞: %s" % body.name)
-	
-	# 这里不处理碰撞，因为我们是垂直运动
-
 func enable_pickup():
 	"""启用拾取"""
 	if can_be_picked_up:
@@ -186,13 +157,6 @@ func enable_pickup():
 	print("鞋可拾取: %s" % shoe_owner)
 	
 	can_be_picked_up = true
-	
-	# 启用拾取区域
-	if pickup_area:
-		pickup_area.monitoring = true
-		pickup_area.monitorable = true
-		if pickup_shape:
-			pickup_shape.disabled = false
 	
 	# 显示发光效果
 	if light_2d:
@@ -208,45 +172,17 @@ func enable_pickup():
 	float_tween.set_loops()
 	float_tween.tween_property(self, "position:y", position.y - 3, 0.6)
 	float_tween.tween_property(self, "position:y", position.y, 0.6)
-
-func _on_pickup_area_entered(area: Area2D):
-	"""拾取区域进入（区域）"""
-	_on_pickup_entered(area)
-
-func _on_pickup_body_entered(body: PhysicsBody2D):
-	"""拾取区域进入（物理体）"""
-	_on_pickup_entered(body)
-
-func _on_pickup_entered(node: Node):
-	"""处理拾取"""
-	if not can_be_picked_up:
-		print("鞋还不能被拾取（无敌时间）")
-		return
-	
-	# 检查是否是玩家
-	var player = node
-	if node is Area2D or node is CollisionShape2D:
-		player = node.get_parent()
-	
-	print("尝试拾取鞋: %s, 拾取者: %s" % [shoe_owner, player.name if player else "未知"])
-	
-	if player and player.has_method("pickup_shoe"):
-		print("玩家有pickup_shoe方法")
-		if player.pickup_shoe(shoe_owner, self):
-			print("拾取成功: %s" % shoe_owner)
-			# 被拾取，回收
-			recover()
-		else:
-			print("拾取失败: pickup_shoe返回false")
-	else:
-		print("不是玩家或没有pickup_shoe方法: %s" % (player.name if player else "无父节点"))
-
+# 在 recover 函数中添加
 func recover():
 	"""回收抛射体"""
 	print("回收鞋抛射体: %s" % shoe_owner)
 	
 	is_active = false
 	has_landed = true
+	
+	# 发送回收信号
+	if owner_node and owner_node.has_method("on_shoe_recovered"):
+		owner_node.on_shoe_recovered(shoe_owner, self)
 	
 	# 播放回收动画
 	if animation_player and animation_player.has_animation("recover"):
@@ -257,7 +193,6 @@ func recover():
 	projectile_recovered.emit()
 	
 	queue_free()
-
 func set_active(active: bool):
 	"""设置活动状态"""
 	is_active = active
@@ -273,3 +208,71 @@ func set_active(active: bool):
 	set_physics_process(active)
 	
 	print("鞋抛射体活动状态: %s" % active)
+
+func fly_to_target(target_position: Vector2, duration: float = 0.3):
+	"""飞到目标位置"""
+	print("鞋子飞向目标: %s, 持续时间: %.2f秒" % [target_position, duration])
+	
+	# 停止物理处理
+	is_active = false
+	has_landed = true
+	set_physics_process(false)
+	
+	# 停止当前所有缓动动画
+	var tween = get_tree().create_tween()
+	tween.set_trans(Tween.TRANS_CUBIC)
+	tween.set_ease(Tween.EASE_IN)
+	
+	# 位置动画
+	tween.tween_property(self, "global_position", target_position, duration)
+	
+	# 大小动画
+	var scale_tween = get_tree().create_tween()
+	scale_tween.set_trans(Tween.TRANS_CUBIC)
+	scale_tween.set_ease(Tween.EASE_OUT)
+	scale_tween.tween_property(sprite, "scale", Vector2(1.2, 1.2), duration * 0.5)
+	scale_tween.tween_property(sprite, "scale", Vector2(0.1, 0.1), duration * 0.5)
+	
+	# 旋转动画
+	var rotate_amount = PI * 4  # 旋转2圈
+	if shoe_owner == "left_shoe":
+		rotate_amount *= -1  # 左鞋反方向旋转
+	rotation_speed = rotate_amount / duration
+	
+	# 透明度动画
+	var fade_tween = get_tree().create_tween()
+	fade_tween.set_trans(Tween.TRANS_LINEAR)
+	fade_tween.tween_property(sprite, "modulate:a", 0.0, duration)
+	
+	# 等待动画完成
+	await tween.finished
+	await scale_tween.finished
+	await fade_tween.finished
+	
+	print("鞋子到达目标位置")
+	projectile_recovered.emit()
+	queue_free()
+
+func recover_to_owner(owner_node: Node, duration: float = 0.3):
+	"""回收给所有者（学生）"""
+	if not owner_node:
+		print("错误: 没有所有者节点")
+		return
+	
+	# 根据鞋子类型决定目标位置
+	var target_offset = Vector2.ZERO
+	if shoe_owner == "left_shoe":
+		target_offset = Vector2(-40, 61)
+	elif shoe_owner == "right_shoe":
+		target_offset = Vector2(40, 61)
+	else:
+		print("未知的鞋子所有者: %s" % shoe_owner)
+		target_offset = Vector2.ZERO
+	
+	# 计算目标位置
+	var target_position = owner_node.global_position + target_offset
+	
+	print("鞋子 %s 开始回收动画" % shoe_owner)
+	
+	# 飞向目标位置
+	fly_to_target(target_position, duration)

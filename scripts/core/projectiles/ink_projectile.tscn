@@ -1,5 +1,28 @@
 [gd_scene format=3 uid="uid://c8tc0lux56ux0"]
 
 [ext_resource type="PackedScene" uid="uid://cwcdy6cdfxkko" path="res://scripts/core/projectiles/projectile_base.tscn" id="1_4bc2x"]
+[ext_resource type="Script" uid="uid://pud4thmpm7it" path="res://scripts/core/projectiles/ink_projectile.gd" id="2_4j86o"]
+[ext_resource type="Texture2D" uid="uid://bwlqhijvwro42" path="res://assets/graphics/characters/student/mo.png" id="3_h0nko"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_4j86o"]
+size = Vector2(36, 36)
 
 [node name="ink_projectile" unique_id=1752467600 instance=ExtResource("1_4bc2x")]
+collision_layer = 8
+collision_mask = 128
+script = ExtResource("2_4j86o")
+
+[node name="Sprite2D" parent="." index="0" unique_id=238013885]
+position = Vector2(0.6874976, 4.064238)
+scale = Vector2(1.368243, 1.3548235)
+texture = ExtResource("3_h0nko")
+
+[node name="CPUParticles2D" parent="." index="3" unique_id=179103400]
+emitting = false
+
+[node name="Area2D" type="Area2D" parent="." index="4" unique_id=1073870486]
+collision_layer = 8
+collision_mask = 128
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D" index="0" unique_id=1766889365]
+shape = SubResource("RectangleShape2D_4j86o")

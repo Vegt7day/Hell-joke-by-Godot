@@ -59,3 +59,38 @@ func spawn_projectile(projectile_type: String, position: Vector2, direction: Vec
 	
 	print("✓ 抛射体生成成功: %s" % projectile_type)
 	return projectile
+#
+#func on_shoe_recovered(shoe_name: String, shoe_owner: Node):
+	#"""鞋子回收时的回调函数"""
+	#print("抛射体管理器收到鞋子回收信号: %s" % shoe_name)
+	#
+	## 触发另一只鞋子的回收
+	#recover_other_shoe_if_exists(shoe_name, shoe_owner)
+#
+#func recover_other_shoe_if_exists(recovered_shoe_name: String, shoe_owner: Node):
+	#"""如果另一只鞋子存在，也回收它"""
+	#print("检查是否需要回收另一只鞋子")
+	#
+	## 确定另一只鞋子的名称
+	#var other_shoe_name = ""
+	#if recovered_shoe_name == "left_shoe":
+		#other_shoe_name = "right_shoe"
+	#elif recovered_shoe_name == "right_shoe":
+		#other_shoe_name = "left_shoe"
+	#else:
+		#return
+	## 在所有活动抛射体中查找另一只鞋子
+	#for projectile in active_projectiles:
+		#if projectile is Area2D and "shoe_owner" in projectile and projectile.shoe_owner == other_shoe_name:
+			#print("找到另一只鞋子: %s，尝试回收" % other_shoe_name)
+			#
+			## 检查鞋子是否可以被回收
+			#if "can_be_picked_up" in projectile and projectile.can_be_picked_up:
+				## 通知鞋子所有者回收另一只鞋子
+				#if shoe_owner.has_method("recover_shoe"):
+					#shoe_owner.recover_shoe(other_shoe_name, projectile)
+				#else:
+					#print("鞋子所有者没有recover_shoe方法")
+			#else:
+				#print("另一只鞋子还不能被拾取")
+			#break
