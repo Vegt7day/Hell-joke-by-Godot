@@ -1,69 +1,261 @@
+# Door.gd
 extends Mechanism
 class_name Door
 
-enum DoorState { CLOSED, OPEN, LOCKED }
+# 添加颜色属性
+@export var color: String = ""  # 颜色名称
+# 定义颜色到标签的映射字典
+var color_to_label = {
+	"红": {
+		"text": "门",  # 门的文本
+		"color": Color.RED
+	},
+	"绿": {
+		"text": "门",
+		"color": Color.GREEN
+	},
+	"蓝": {
+		"text": "门",
+		"color": Color.BLUE
+	},
+	"黄": {
+		"text": "门",
+		"color": Color.YELLOW
+	},
+	"紫": {
+		"text": "门",
+		"color": Color.PURPLE
+	},
+	"青": {
+		"text": "门",
+		"color": Color.CYAN
+	},
+	"白": {
+		"text": "门",
+		"color": Color.WHITE
+	},
+	"黑": {
+		"text": "门",
+		"color": Color.BLACK
+	}
+}
 
-@export var door_color: String = ""
-@export var initial_state: DoorState = DoorState.CLOSED
-@export var is_locked: bool = false
-@export var required_keys: int = 0
-@export var auto_close_delay: float = 0.0  # 0表示不自动关闭
-@export var open_height: float = 32.0  # 开门时向上的移动距离
-@export var door_scale: Vector2 = Vector2(1, 0.5)  # 透视效果的比例缩放
-@export var animation_duration: float = 0.5  # 动画持续时间
+
+enum DoorState { CLOSED, OPEN }
+
+@export var open_height: float = 32.0
+@export var door_scale: Vector2 = Vector2(1, 0.5)
+@export var animation_duration: float = 0.5
 
 var current_state: DoorState = DoorState.CLOSED
 var is_animating: bool = false
+var original_position: Vector2
+var original_scale: Vector2
 var linked_switches: Array = []
-var keys_collected: int = 0
-var close_timer: SceneTreeTimer = null
-var original_position: Vector2  # 记录原始位置
-var original_scale: Vector2    # 记录原始缩放
+var all_switches_off: bool = true  # 默认认为所有开关都是关的，直到检查
 
-# 添加物理属性
 @onready var static_body: StaticBody2D = $StaticBody2D
-@onready var door_visual: Node2D = $VisualNode  # 用于动画的视觉节点
+@onready var door_visual: Node2D = $VisualNode
 
 func _ready():
 	mechanism_type = "door"
 	text = "门"
 	
-	# 记录初始位置和缩放
-	original_position = position
-	original_scale = scale if door_visual else Vector2.ONE
+	# 在父类初始化前获取节点引用
+	if not door_visual:
+		door_visual = get_node_or_null("VisualNode")
+		if not door_visual:
+			# 如果找不到 VisualNode，尝试获取 Sprite2D
+			door_visual = get_node_or_null("Sprite2D")
 	
-	# 先调用父类初始化
+	if not label or not is_instance_valid(label):
+		label = get_node_or_null("label")
+		if label:
+			print("门获取到Label节点: %s" % label.name)
+		else:
+			print("门未找到Label节点")
+	
+	# 在调用父类之前设置颜色
+	if color != "":
+		mechanism_color = color
+	else:
+		color = mechanism_color
+	
+	# 记录初始位置
+	original_position = position
+	if door_visual:
+		original_scale = door_visual.scale
+	else:
+		original_scale = scale
+	
+	print("门初始化: 名称=%s, 颜色='%s', mechanism_color='%s'" % [name, color, mechanism_color])
+	
+	# 先调用父类
 	super._ready()
 	
-	# 应用颜色方案
-	apply_color_scheme(door_color)
+	# 确保颜色设置正确
+	if color != "":
+		update_door_color()
 	
-	# 禁用物理处理，防止下坠
 	set_physics_process(false)
 	
-	# 确保静态体存在
 	if not static_body:
 		static_body = get_node_or_null("StaticBody2D")
 		if not static_body:
-			# 如果没有，创建一个
 			static_body = StaticBody2D.new()
 			static_body.name = "StaticBody2D"
 			add_child(static_body)
 	
-	# 设置静态体属性
-	static_body.collision_layer = 2  # 障碍层
-	static_body.collision_mask = 3   # 玩家和子弹层
+	static_body.collision_layer = 1
 	
-	current_state = initial_state
+	static_body.collision_mask =2 | 3 
 	
-	# 根据初始状态设置
-	match current_state:
-		DoorState.CLOSED:
-			_apply_closed_state()
-		DoorState.OPEN:
-			_apply_open_state()
-		DoorState.LOCKED:
-			_apply_locked_state()
+	current_state = DoorState.CLOSED
+	_apply_closed_state()
+	
+	# 初始化时检查开关状态
+	if linked_switches.size() > 0:
+		call_deferred("check_switches_state")
+	
+	print("门初始化完成: 颜色=%s, mechanism_color=%s" % [color, mechanism_color])
+
+# 添加颜色设置方法
+func set_color(color_name: String):
+	"""设置门颜色"""
+	color = color_name
+	mechanism_color = color_name
+	update_door_color()
+
+func get_color_from_name(color_name: String) -> Color:
+	"""根据颜色名称获取颜色值"""
+	var color_map = {
+		"红": Color.RED,
+		"绿": Color.GREEN,
+		"蓝": Color.BLUE,
+		"黄": Color.YELLOW,
+		"紫": Color.PURPLE,
+		"青": Color.CYAN,
+		"白": Color.WHITE,
+		"黑": Color.BLACK
+	}
+	
+	return color_map.get(color_name, Color.WHITE)
+
+func update_door_color():
+	"""更新门的外观颜色 - 专注设置标签颜色"""
+	print("=== 更新门标签颜色开始 ===")
+	print("门当前颜色: '%s'" % color)
+	
+	# 确保获取到标签节点
+	if not label or not is_instance_valid(label):
+		label = get_node_or_null("label")
+		print("重新获取标签节点: %s" % label)
+	
+	if label:
+		# 检查颜色映射
+		if color in color_to_label:
+			var color_info = color_to_label[color]
+			print("找到颜色映射: %s -> 文本: %s, 颜色: %s" % [color, color_info.text, str(color_info.color)])
+			
+			# 设置标签文本
+			label.text = color_info.text
+			print("设置标签文本: %s" % color_info.text)
+			
+			# 设置标签颜色
+			label.modulate = color_info.color
+			print("设置标签颜色: %s" % str(color_info.color))
+			
+			# 确保视觉节点颜色
+			if door_visual:
+				door_visual.modulate = color_info.color
+				print("设置视觉节点颜色")
+		else:
+			print("警告: 颜色 '%s' 不在映射表中, 可用颜色: %s" % [color, str(color_to_label.keys())])
+			
+			# 默认颜色
+			label.text = "?"
+			label.modulate = Color.WHITE
+			if door_visual:
+				door_visual.modulate = Color.WHITE
+	else:
+		print("错误: 没有找到标签节点!")
+	
+	print("=== 更新门标签颜色结束 ===")
+
+func _process(delta):
+	"""每帧更新，检查连接的开关状态"""
+	# 移除每帧检查，改为通过信号触发
+	pass
+
+func _on_switch_state_changed(state: bool):
+	"""开关状态变化时的回调"""
+	print("门 %s 接收到开关状态变化信号: %s" % [name, ("开" if state else "关")])
+	check_switches_state()
+
+func check_switches_state():
+	"""检查所有连接开关的状态 - 只有所有开关都是'关'时，门才会打开"""
+	print("=== 门 %s 开始检查开关状态 ===" % name)
+	print("门当前颜色: %s, 连接开关数: %d" % [mechanism_color, linked_switches.size()])
+	
+	# 如果没有连接开关，保持当前状态
+	if linked_switches.size() == 0:
+		print("没有连接开关，门保持当前状态")
+		all_switches_off = true
+		# 如果没有开关连接，默认打开门
+		if current_state == DoorState.CLOSED and not is_animating:
+			open()
+		return
+	
+	var all_off = true
+	var switch_count = 0
+	
+	# 检查所有开关是否都是"关"状态
+	for i in range(linked_switches.size()):
+		var switch = linked_switches[i]
+		if switch and is_instance_valid(switch) and switch.has_method("get_switch_state"):
+			var switch_state = switch.get_switch_state()
+			switch_count += 1
+			print("  [%d] 开关 %s 状态: %s" % [i, switch.name, "开" if switch_state else "关"])
+			
+			# 如果有一个开关是"开"状态，则不满足开门条件
+			if switch_state:  # 如果开关是"开"状态
+				all_off = false
+				print("  [%d] 发现开关 %s 是'开'状态，不满足开门条件" % [i, switch.name])
+				break
+		else:
+			# 如果开关无效或已删除，从列表中移除
+			if not switch or not is_instance_valid(switch):
+				print("  [%d] 开关无效或已删除，从列表中移除" % i)
+				linked_switches.remove_at(i)
+				i -= 1
+				continue
+			else:
+				print("  [%d] 开关没有 get_switch_state 方法" % i)
+				all_off = false
+				break
+	
+	print("检查了 %d 个开关，所有开关都关闭: %s" % [switch_count, all_off])
+	
+	# 如果状态发生变化
+	if all_off != all_switches_off:
+		print("开关状态变化: 所有开关都关闭? %s -> %s" % [all_switches_off, all_off])
+		all_switches_off = all_off
+		
+		# 只有当所有开关都是"关"时，门才打开
+		if all_switches_off:  # 所有开关都关闭
+			# 门应该打开
+			if current_state == DoorState.CLOSED and not is_animating:
+				print("所有开关关闭，开门")
+				open()
+		else:  # 有一个或多个开关是"开"状态
+			# 门应该关闭
+			if current_state == DoorState.OPEN and not is_animating:
+				print("有开关打开，关门")
+				close()
+	else:
+		print("开关状态未变化")
+	
+	print("=== 门 %s 结束检查开关状态 ===" % name)
 
 func _apply_closed_state():
 	"""应用关闭状态（不播放动画）"""
@@ -72,9 +264,11 @@ func _apply_closed_state():
 	
 	# 启用碰撞
 	if static_body:
-		static_body.set_collision_layer_value(2, true)
-		static_body.set_collision_mask_value(1, true)
-		static_body.set_collision_mask_value(4, true)
+		static_body.set_collision_layer_value(1, true)
+		static_body.set_collision_mask_value(2, true)  # 玩家
+		static_body.set_collision_mask_value(3, true)  # 子弹
+	
+	print("门关闭: %s, 启用碰撞" % mechanism_color)
 	
 	# 视觉：重置到原始状态
 	if door_visual:
@@ -97,9 +291,11 @@ func _apply_open_state():
 	
 	# 禁用碰撞
 	if static_body:
-		static_body.set_collision_layer_value(2, false)
-		static_body.set_collision_mask_value(1, false)
-		static_body.set_collision_mask_value(4, false)
+		static_body.set_collision_layer_value(1, false)
+		static_body.set_collision_mask_value(2, false)  # 玩家
+		static_body.set_collision_mask_value(3, false)  # 子弹
+	
+	print("门打开: %s, 禁用碰撞" % mechanism_color)
 	
 	# 视觉：透视（菱形）效果
 	if door_visual:
@@ -112,151 +308,33 @@ func _apply_open_state():
 	# 设置文字颜色
 	if label and is_instance_valid(label):
 		label.modulate = text_color * Color(1, 1, 1, 0.5)
-	
-	# 如果需要自动关闭
-	if auto_close_delay > 0:
-		start_auto_close_timer()
 
-func _apply_locked_state():
-	"""应用锁定状态（不播放动画）"""
-	current_state = DoorState.LOCKED
-	text = "锁"
+# 修改后的 toggle 函数
+func toggle(_attacker = null):  # 添加一个可选参数
+	print("门 %s 接收到切换命令" % name)
 	
-	# 启用碰撞
-	if static_body:
-		static_body.set_collision_layer_value(2, true)
-		static_body.set_collision_mask_value(1, true)
-		static_body.set_collision_mask_value(4, true)
-	
-	# 视觉：深色
-	if label and is_instance_valid(label):
-		label.modulate = text_color * Color(0.5, 0.5, 0.5, 1.0)
-	
-	# 视觉状态保持关闭
-	if door_visual:
-		door_visual.position = Vector2.ZERO
-		door_visual.scale = Vector2.ONE
+	# 修正：toggle 应该切换门的当前状态
+	if current_state == DoorState.CLOSED:
+		open()
 	else:
-		position = original_position
-		scale = Vector2.ONE
+		
+		close()
 
-func set_closed():
-	"""设置门为关闭状态（带动画）"""
-	if current_state == DoorState.CLOSED or is_animating:
-		return
-	
-	print("门关闭: %s" % door_color)
-	
-	current_state = DoorState.CLOSED
-	text = "门"
-	
-	# 启用碰撞
-	if static_body:
-		static_body.set_collision_layer_value(2, true)
-		static_body.set_collision_mask_value(1, true)
-		static_body.set_collision_mask_value(4, true)
-	
-	# 播放关门动画
-	play_close_animation()
+func open():
+	print("门 %s 正在打开..." % name)
+	if not is_animating and current_state != DoorState.OPEN:
+		play_open_animation()
 
-func set_open():
-	"""设置门为开启状态（带动画）"""
-	if current_state == DoorState.OPEN or is_animating:
-		return
-	
-	print("门开启: %s" % door_color)
-	
-	current_state = DoorState.OPEN
-	text = "开"
-	
-	# 播放开门动画
-	play_open_animation()
-
-func set_locked():
-	"""设置门为锁定状态（带动画）"""
-	if current_state == DoorState.LOCKED or is_animating:
-		return
-	
-	print("门锁定: %s" % door_color)
-	
-	current_state = DoorState.LOCKED
-	text = "锁"
-	
-	# 启用碰撞
-	if static_body:
-		static_body.set_collision_layer_value(2, true)
-		static_body.set_collision_mask_value(1, true)
-		static_body.set_collision_mask_value(4, true)
-	
-	# 播放锁定动画
-	play_lock_animation()
-
-func toggle(switch: Node2D = null):
-	"""切换门状态"""
-	if is_locked:
-		print("门被锁定，无法切换")
-		play_locked_effect()
-		return
-	
-	if is_animating:
-		return
-	
-	match current_state:
-		DoorState.CLOSED:
-			open(switch)
-		DoorState.OPEN:
-			close(switch)
-		DoorState.LOCKED:
-			# 如果锁定，尝试解锁
-			try_unlock(switch)
-
-func open(switch: Node2D = null):
-	"""开门"""
-	if current_state == DoorState.OPEN or is_locked or is_animating:
-		return
-	
-	print("开门: %s, 触发者: %s" % [door_color, switch])
-	
-	# 播放开门动画
-	set_open()
-	
-	# 播放音效
-	play_open_sound()
-	
-	# 发射信号
-	mechanism_triggered.emit(self, switch)
-	
-	# 停止之前的自动关闭计时器
-	stop_auto_close_timer()
-	
-	# 开始新的自动关闭计时器
-	if auto_close_delay > 0:
-		start_auto_close_timer()
-
-func close(switch: Node2D = null):
-	"""关门"""
-	if current_state == DoorState.CLOSED or is_animating:
-		return
-	
-	print("关门: %s, 触发者: %s" % [door_color, switch])
-	
-	# 播放关门动画
-	set_closed()
-	
-	# 播放音效
-	play_close_sound()
-	
-	# 发射信号
-	mechanism_triggered.emit(self, switch)
-	
-	# 停止自动关闭计时器
-	stop_auto_close_timer()
+func close():
+	print("门 %s 正在关闭..." % name)
+	if not is_animating and current_state != DoorState.CLOSED:
+		play_close_animation()
 
 func play_open_animation():
 	"""播放开门动画 - 带透视效果"""
 	is_animating = true
 	
-	# 先播放声音
+	# 播放音效
 	play_open_sound()
 	
 	if anim_player and anim_player.has_animation("open"):
@@ -270,9 +348,9 @@ func play_open_animation():
 		
 		# 禁用碰撞（在动画开始后）
 		if static_body:
-			static_body.set_collision_layer_value(2, false)
-			static_body.set_collision_mask_value(1, false)
-			static_body.set_collision_mask_value(4, false)
+			static_body.set_collision_layer_value(1, false)
+			static_body.set_collision_mask_value(2, false)
+			static_body.set_collision_mask_value(3, false)
 		
 		# 动画目标节点
 		var target_node = door_visual if door_visual else self
@@ -297,15 +375,14 @@ func play_open_animation():
 	
 	is_animating = false
 	
-	# 更新文字透明度
-	if label and is_instance_valid(label):
-		label.modulate = text_color * Color(1, 1, 1, 0.5)
+	# 应用打开状态
+	_apply_open_state()
 
 func play_close_animation():
 	"""播放关门动画"""
 	is_animating = true
 	
-	# 先播放声音
+	# 播放音效
 	play_close_sound()
 	
 	if anim_player and anim_player.has_animation("close"):
@@ -340,36 +417,14 @@ func play_close_animation():
 		
 		# 动画结束后启用碰撞
 		if static_body:
-			static_body.set_collision_layer_value(2, true)
-			static_body.set_collision_mask_value(1, true)
-			static_body.set_collision_mask_value(4, true)
+			static_body.set_collision_layer_value(1, true)
+			static_body.set_collision_mask_value(2, true)
+			static_body.set_collision_mask_value(3, true)
 	
 	is_animating = false
 	
-	# 更新文字颜色
-	if label and is_instance_valid(label):
-		label.modulate = text_color
-
-func play_lock_animation():
-	"""播放锁定动画"""
-	if is_animating:
-		return
-	
-	is_animating = true
-	
-	if anim_player and anim_player.has_animation("lock"):
-		anim_player.play("lock")
-		await anim_player.animation_finished
-	else:
-		# 闪烁效果
-		var tween = get_tree().create_tween()
-		for i in range(3):
-			tween.tween_property(label, "modulate", Color.RED, 0.1)
-			tween.tween_property(label, "modulate", text_color * Color(0.5, 0.5, 0.5, 1.0), 0.1)
-		
-		await tween.finished
-	
-	is_animating = false
+	# 应用关闭状态
+	_apply_closed_state()
 
 func _deferred_set_closed_color():
 	"""延迟设置关闭颜色"""
@@ -380,6 +435,7 @@ func _deferred_set_open_color():
 	"""延迟设置开启颜色"""
 	if label and is_instance_valid(label):
 		label.modulate = text_color * Color(1, 1, 1, 0.5)
+
 func play_open_sound():
 	"""播放开门音效"""
 	if audio_player:
@@ -396,105 +452,39 @@ func play_close_sound():
 			audio_player.stream = sound
 			audio_player.play()
 
-func start_auto_close_timer():
-	"""开始自动关门计时器"""
-	stop_auto_close_timer()
-	
-	close_timer = get_tree().create_timer(auto_close_delay)
-	close_timer.timeout.connect(_on_auto_close_timeout)
-
-func stop_auto_close_timer():
-	"""停止自动关门计时器"""
-	if close_timer and not close_timer.is_stopped():
-		close_timer.stop()
-
-func _on_auto_close_timeout():
-	"""自动关门"""
-	if current_state == DoorState.OPEN:
-		close()
-
-func try_unlock(switch: Node2D = null):
-	"""尝试解锁"""
-	if keys_collected >= required_keys:
-		print("门解锁: %s" % door_color)
-		is_locked = false
-		set_closed()
-		
-		# 播放解锁效果
-		play_unlock_effect()
-	else:
-		print("需要 %d 把钥匙，当前: %d" % [required_keys, keys_collected])
-		
-		# 播放锁定提示
-		play_locked_effect()
-
-func add_key():
-	"""添加钥匙"""
-	keys_collected += 1
-	print("获得钥匙: %d/%d" % [keys_collected, required_keys])
-	
-	# 如果收集足够钥匙，解锁
-	if keys_collected >= required_keys and current_state == DoorState.LOCKED:
-		try_unlock()
-
-func play_unlock_effect():
-	"""播放解锁效果"""
-	# 播放动画
-	if anim_player and anim_player.has_animation("unlock"):
-		anim_player.play("unlock")
-	
-	# 播放音效
-	if audio_player:
-		var sound = load("res://assets/sounds/unlock.wav")
-		if sound:
-			audio_player.stream = sound
-			audio_player.play()
-	
-	# 粒子效果
-	var particles = GPUParticles2D.new()
-	particles.amount = 30
-	particles.lifetime = 1.0
-	particles.process_material = ParticleProcessMaterial.new()
-	particles.process_material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
-	particles.process_material.emission_sphere_radius = 20.0
-	particles.process_material.gravity = Vector3(0, 0, 0)
-	particles.process_material.initial_velocity = 50.0
-	particles.process_material.initial_velocity_random = 0.3
-	particles.process_material.color = Color.GOLD
-	
-	add_child(particles)
-	particles.emitting = true
-	
-	# 延迟后销毁
-	await get_tree().create_timer(2.0).timeout
-	particles.queue_free()
-
-func play_locked_effect():
-	"""播放锁定效果"""
-	# 闪烁红色
-	var tween = get_tree().create_tween()
-	tween.tween_property(label, "modulate", Color.RED, 0.1)
-	tween.tween_property(label, "modulate", text_color * Color(0.5, 0.5, 0.5, 1.0), 0.1)
-	tween.set_loops(3)
-	
-	# 播放音效
-	if audio_player:
-		var sound = load("res://assets/sounds/locked.wav")
-		if sound:
-			audio_player.stream = sound
-			audio_player.play()
-
 func link_switch(switch: Node2D):
 	"""连接开关"""
 	if switch and switch not in linked_switches:
 		linked_switches.append(switch)
-		print("门连接到开关: %s" % switch.name)
+		print("门 %s 连接到开关: %s" % [name, switch.name])
+		
+		# 连接开关状态变化信号
+		if switch.has_signal("switch_state_changed"):
+			print("门 %s 正在连接开关信号..." % name)
+			switch.switch_state_changed.connect(_on_switch_state_changed.bind(), CONNECT_DEFERRED)
+			print("已连接开关信号")
+		
+		# 立即检查一次状态
+		check_switches_state()
+
+func unlink_switch(switch: Node2D):
+	"""断开开关连接"""
+	if switch in linked_switches:
+		linked_switches.erase(switch)
+		print("门 %s 断开连接开关: %s" % [name, switch.name])
+		
+		# 检查开关状态
+		check_switches_state()
+
+func get_switch_state() -> bool:
+	"""获取门状态（用于调试）"""
+	return current_state == DoorState.OPEN
 
 func get_door_data() -> Dictionary:
 	"""获取门数据"""
 	var data = get_mechanism_data()
 	data["state"] = current_state
-	data["is_locked"] = is_locked
-	data["keys_collected"] = keys_collected
-	data["required_keys"] = required_keys
+	data["color"] = mechanism_color
+	data["linked_switches_count"] = linked_switches.size()
+	data["all_switches_off"] = all_switches_off
 	return data

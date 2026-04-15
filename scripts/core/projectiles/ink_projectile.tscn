@@ -4,12 +4,14 @@
 [ext_resource type="Script" uid="uid://pud4thmpm7it" path="res://scripts/core/projectiles/ink_projectile.gd" id="2_4j86o"]
 [ext_resource type="Texture2D" uid="uid://bwlqhijvwro42" path="res://assets/graphics/characters/student/mo.png" id="3_h0nko"]
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_h0nko"]
+size = Vector2(37, 37)
+
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_4j86o"]
-size = Vector2(36, 36)
+size = Vector2(37, 37)
 
 [node name="ink_projectile" unique_id=1752467600 instance=ExtResource("1_4bc2x")]
-collision_layer = 8
-collision_mask = 128
+collision_mask = 1
 script = ExtResource("2_4j86o")
 
 [node name="Sprite2D" parent="." index="0" unique_id=238013885]
@@ -17,12 +19,12 @@ position = Vector2(0.6874976, 4.064238)
 scale = Vector2(1.368243, 1.3548235)
 texture = ExtResource("3_h0nko")
 
-[node name="CPUParticles2D" parent="." index="3" unique_id=179103400]
-emitting = false
+[node name="CollisionShape2D" parent="." index="1" unique_id=1123568238]
+position = Vector2(0, 0)
+shape = SubResource("RectangleShape2D_h0nko")
 
 [node name="Area2D" type="Area2D" parent="." index="4" unique_id=1073870486]
-collision_layer = 8
-collision_mask = 128
+collision_layer = 4
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D" index="0" unique_id=1766889365]
 shape = SubResource("RectangleShape2D_4j86o")

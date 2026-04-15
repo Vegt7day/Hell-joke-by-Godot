@@ -94,8 +94,8 @@ func setup_collision():
 		match mechanism_type:
 			"switch", "dirt":
 				# 开关和灰尘源可被攻击
-				set_collision_layer_value(5, true)  # 机关层
-				set_collision_mask_value(4, true)     # 子弹层
+				set_collision_layer_value(1, true)  # 机关层
+				set_collision_mask_value(3, true)     # 子弹层
 			
 			"door":
 				# 门可被穿过或被阻挡
@@ -104,7 +104,7 @@ func setup_collision():
 					set_collision_layer(0)
 				else:
 					# 关闭状态：阻挡
-					set_collision_layer_value(2, true)  # 障碍层
+					set_collision_layer_value(1, true)  # 障碍层
 			
 			"teleporter", "fire", "goal":
 				# 传送门、火、终点：可穿过
@@ -112,7 +112,7 @@ func setup_collision():
 			
 			"bow", "arrow", "dust":
 				# 弓箭系统
-				set_collision_layer_value(6, true)  # 投射物层
+				set_collision_layer_value(3, true)  # 投射物层
 
 func _on_area_entered(area: Area2D):
 	"""区域进入"""

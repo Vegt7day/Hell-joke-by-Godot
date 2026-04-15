@@ -12,8 +12,8 @@ func _ready():
 	print("墙初始化: %s" % name)
 	
 	# 设置碰撞层
-	set_collision_layer_value(2, true)  
-	set_collision_mask_value(1, true)   
+	set_collision_layer_value(1, true)  
+	set_collision_mask_value(0, true)   
 	
 	# 将墙添加到"wall"组
 	add_to_group("wall")

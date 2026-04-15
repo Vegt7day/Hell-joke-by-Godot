@@ -9,6 +9,8 @@ size = Vector2(28, 28)
 size = Vector2(28, 28)
 
 [node name="Mechanism" type="Area2D" unique_id=2132526249]
+collision_layer = 32
+collision_mask = 10
 script = ExtResource("1_vu78w")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=691877437]
@@ -26,7 +28,9 @@ theme_override_font_sizes/font_size = 28
 [node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="." unique_id=216999875]
 
 [node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=101690446]
-collision_mask = 8
+visible = false
+collision_layer = 32
+collision_mask = 10
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D" unique_id=1885272820]
 shape = SubResource("RectangleShape2D_vu78w")

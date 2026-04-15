@@ -41,15 +41,14 @@ func setup_ink_collision_layers():
 	set_collision_layer(0)
 	set_collision_mask(0)
 	
-	# 设置碰撞层（抛射体自身）
-	set_collision_layer_value(1, true)  # 默认层
-	set_collision_layer_value(4, true)  # 抛射体层
+
+	set_collision_layer_value(3, true)  # 抛射体层
 	
 	# 设置碰撞掩码（检测哪些层）
-	set_collision_mask_value(2, true)  # 地面/障碍物
-	set_collision_mask_value(3, true)  # 敌人
-	set_collision_mask_value(5, true)  # 可交互物
-	set_collision_mask_value(6, true)  # 机关（新增）
+	set_collision_mask_value(1, true)  # 地面/障碍物
+	#set_collision_mask_value(3, true)  # 敌人
+	#set_collision_mask_value(5, true)  # 可交互物
+	#set_collision_mask_value(6, true)  # 机关（新增）
 
 func setup_sprite():
 	"""设置墨弹的Sprite显示"""

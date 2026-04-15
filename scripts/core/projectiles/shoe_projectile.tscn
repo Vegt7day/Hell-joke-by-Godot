@@ -7,8 +7,8 @@
 size = Vector2(28, 28)
 
 [node name="shoe_projectile" unique_id=1752467600 instance=ExtResource("1_sjde8")]
-collision_layer = 8
-collision_mask = 128
+collision_layer = 4
+collision_mask = 3
 script = ExtResource("2_y6hsc")
 upward_speed = 400.0
 gravity_strength = 600.0
@@ -24,8 +24,8 @@ scale = Vector2(0.7361111, 0.7638889)
 emitting = false
 
 [node name="Area2D" type="Area2D" parent="." index="4" unique_id=900453958]
-collision_layer = 8
-collision_mask = 128
+collision_layer = 4
+collision_mask = 3
 
 [node name="PickupArea" type="CollisionShape2D" parent="Area2D" index="0" unique_id=795009598]
 shape = SubResource("RectangleShape2D_sjde8")

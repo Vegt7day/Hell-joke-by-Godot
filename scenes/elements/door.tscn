@@ -5,18 +5,18 @@
 
 [node name="door" unique_id=2039559899 instance=ExtResource("1_e708x")]
 script = ExtResource("2_r8hfh")
-door_color = ""
-initial_state = 0
-is_locked = false
-required_keys = 0
-auto_close_delay = 0.0
+color = ""
 open_height = 32.0
 door_scale = Vector2(1, 0.5)
 animation_duration = 0.5
 
 [node name="label" parent="." index="1" unique_id=1899630671]
-offset_left = -14.0
-offset_top = -21.0
-offset_right = 72.0
-offset_bottom = 39.0
+offset_left = -15.0
+offset_top = -22.0
+offset_right = 71.0
+offset_bottom = 38.0
+theme_override_font_sizes/font_size = 31
 text = "门"
+
+[node name="StaticBody2D" parent="." index="4" unique_id=101690446]
+visible = false

@@ -5,10 +5,8 @@
 
 [node name="switch" unique_id=2039559899 instance=ExtResource("1_f772o")]
 script = ExtResource("2_jwosh")
-door_color = ""
+color = ""
 is_toggle = true
-is_pressure_plate = false
-require_stay = false
 
 [node name="label" parent="." index="1" unique_id=1899630671]
 offset_left = -13.0
@@ -16,3 +14,8 @@ offset_top = -21.0
 offset_right = 43.0
 offset_bottom = 35.0
 text = "开"
+
+[node name="StaticBody2D" parent="." index="4" unique_id=101690446]
+visible = true
+collision_layer = 32
+collision_mask = 10

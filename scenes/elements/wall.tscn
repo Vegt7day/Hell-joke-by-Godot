@@ -4,7 +4,6 @@
 [ext_resource type="Script" uid="uid://dbacbwpi7nqam" path="res://scripts/elements/wall.gd" id="2_c8uqr"]
 
 [node name="wall" unique_id=2039559899 instance=ExtResource("1_6v3t3")]
-collision_layer = 8
 script = ExtResource("2_c8uqr")
 is_destructible = false
 health = 3

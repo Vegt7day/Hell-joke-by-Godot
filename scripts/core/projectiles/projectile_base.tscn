@@ -4,9 +4,11 @@
 [ext_resource type="Texture2D" uid="uid://q6k873n257br" path="res://assets/graphics/characters/student/shoe.png" id="2_fynhx"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_nsvdw"]
-size = Vector2(37, 37)
+size = Vector2(28, 28)
 
 [node name="projectile_base" type="Area2D" unique_id=1752467600]
+collision_layer = 33
+collision_mask = 8
 script = ExtResource("1_yyrli")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=238013885]
@@ -15,8 +17,10 @@ scale = Vector2(1, 1.0277778)
 texture = ExtResource("2_fynhx")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1123568238]
+position = Vector2(-0.5, 0.5)
 shape = SubResource("RectangleShape2D_nsvdw")
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=543951566]
 
 [node name="CPUParticles2D" type="CPUParticles2D" parent="." unique_id=179103400]
+emitting = false

@@ -11,11 +11,13 @@ size = Vector2(91, 129)
 size = Vector2(91, 129)
 
 [node name="Student" unique_id=571628808 instance=ExtResource("1_etu71")]
+collision_layer = 2
+collision_mask = 43
 script = ExtResource("1_7jsl3")
 
 [node name="PickupArea" type="Area2D" parent="." index="0" unique_id=1115911381]
-collision_layer = 128
-collision_mask = 8
+collision_layer = 2
+collision_mask = 5
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PickupArea" index="0" unique_id=1170669352]
 position = Vector2(0.5, 1.5)

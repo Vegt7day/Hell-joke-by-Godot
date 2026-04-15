@@ -12,6 +12,8 @@ var is_camera_dragging: bool = false
 var camera_drag_start: Vector2
 var camera_original_position: Vector2
 var camera_zoom: float = 1.0
+var test_switch_door_connections = {}  # 测试模式下的开关-门连接
+var test_teleporter_connections = {}  # 测试模式下的传送门连接
 
 
 # 场景引用
@@ -805,14 +807,24 @@ func create_element_from_data(data: Dictionary) -> Node2D:
 		"switch":
 			if switch_scene:
 				element = switch_scene.instantiate() as Node2D
-				if element and "door_color" in element and "door_color" in data:
-					element.door_color = data["door_color"]
-		
+				if element:
+					# 设置颜色
+					if "color" in data and "color" in element:
+						element.color = data["color"]
+						print("  从数据设置开关的颜色: %s" % data["color"])
+					
+					# 应用颜色方案
+					if element.has_method("apply_color_scheme") and "color" in element:
+						element.apply_color_scheme(element.color)
+						print("  调用apply_color_scheme: %s" % element.color)
+					
+					if "current_state" in element and "state" in data:
+						element.current_state = data["state"]
 		"door":
 			if door_scene:
 				element = door_scene.instantiate() as Node2D
-				if element and "door_color" in element and "door_color" in data:
-					element.door_color = data["door_color"]
+				if element and "color" in element and "color" in data:
+					element.color = data["color"]
 					if "current_state" in element and "state" in data:
 						element.current_state = data["state"]
 		
@@ -873,9 +885,9 @@ func create_element_from_data(data: Dictionary) -> Node2D:
 			# 设置Color值
 			if data["color"] is int and data["color"] < color_values.size():
 				element.color = color_values[data["color"]]
-		elif "color" in data and "door_color" in element:
+		elif "color" in data and "color" in element:
 			# 设置door_color为颜色索引
-			element.door_color = data["color"]
+			element.color = data["color"]
 		elif "color" in data and "mechanism_color" in element:
 			# 设置mechanism_color为颜色索引
 			element.mechanism_color = data["color"]
@@ -1061,12 +1073,228 @@ func toggle_test_mode():
 	update_ui_info()
 	print("测试模式: %s" % ("激活" if test_mode_active else "关闭"))
 
+
+func setup_switch_door_connections():
+	"""在测试模式下自动连接同颜色的开关和门"""
+	test_switch_door_connections.clear()
+	
+	# 收集所有开关和门
+	var switches = []
+	var doors = []
+	
+	for element in elements:
+		if is_instance_valid(element):
+			if element is Switch:
+				switches.append(element)
+			elif element is Door:
+				doors.append(element)
+	
+	print("找到 %d 个开关和 %d 个门" % [switches.size(), doors.size()])
+	
+	# 按颜色分组
+	var color_groups = {}
+	
+	for switch in switches:
+		var switch_color = get_element_color(switch)
+		if not switch_color in color_groups:
+			color_groups[switch_color] = {"switches": [], "doors": []}
+		color_groups[switch_color].switches.append(switch)
+	
+	for door in doors:
+		var door_color = get_element_color(door)
+		if not door_color in color_groups:
+			color_groups[door_color] = {"switches": [], "doors": []}
+		color_groups[door_color].doors.append(door)
+	
+	# 为每个颜色组的开关和门创建连接
+	for color_name in color_groups.keys():
+		var group = color_groups[color_name]
+		if group.switches.size() > 0 and group.doors.size() > 0:
+			print("颜色组 %s: %d 个开关 -> %d 个门" % [color_name, group.switches.size(), group.doors.size()])
+			
+			for switch in group.switches:
+				for door in group.doors:
+					# 建立双向连接
+					if is_instance_valid(switch) and is_instance_valid(door):
+						if switch.has_method("link_door"):
+							switch.link_door(door)
+						
+						if door.has_method("link_switch"):
+							door.link_switch(switch)
+						
+						# 记录连接
+						if not test_switch_door_connections.has(switch):
+							test_switch_door_connections[switch] = []
+						test_switch_door_connections[switch].append(door)
+						
+						print("连接: %s[%s] -> %s[%s]" % [switch.name, get_element_color(switch), door.name, get_element_color(door)])
+
+func get_element_color(element: Node2D) -> String:
+	"""获取元素的颜色"""
+	# 优先尝试 color 属性
+	if "color" in element and element.color != "":
+		return element.color
+	
+	# 尝试 mechanism_color
+	if "mechanism_color" in element and element.mechanism_color != "":
+		return element.mechanism_color
+	
+	# 默认返回空字符串
+	return ""
+	
+func setup_teleporter_connections():
+	"""建立传送门连接（输入到输出，同颜色）"""
+	test_teleporter_connections.clear()
+	
+	# 收集所有传送门
+	var teleporters_in = []
+	var teleporters_out = []
+	
+	for element in elements:
+		if is_instance_valid(element):
+			var element_name = element.name.to_lower()
+			
+			# 检查是否是传送门输入
+			if "teleporter" in element_name and "in" in element_name:
+				teleporters_in.append(element)
+				print("找到传送门输入: %s" % element.name)
+			
+			# 检查是否是传送门输出
+			elif "teleporter" in element_name and "out" in element_name:
+				teleporters_out.append(element)
+				print("找到传送门输出: %s" % element.name)
+	
+	# 按颜色分组
+	var teleporters_in_by_color = {}
+	var teleporters_out_by_color = {}
+	
+	for tele_in in teleporters_in:
+		var color = 0
+		if tele_in.has_method("get_color"):
+			color = tele_in.get_color()
+		teleporters_in_by_color[color] = tele_in
+		print("传送门输入 %s 颜色: %d" % [tele_in.name, color])
+	
+	for tele_out in teleporters_out:
+		var color = 0
+		if tele_out.has_method("get_color"):
+			color = tele_out.get_color()
+		teleporters_out_by_color[color] = tele_out
+		print("传送门输出 %s 颜色: %d" % [tele_out.name, color])
+	
+	# 建立连接
+	for color in teleporters_in_by_color:
+		if teleporters_out_by_color.has(color):
+			var tele_in = teleporters_in_by_color[color]
+			var tele_out = teleporters_out_by_color[color]
+			
+			# 建立连接
+			connect_teleporters(tele_in, tele_out)
+			print("✓ 连接传送门: %s -> %s (颜色: %d)" % [tele_in.name, tele_out.name, color])
+			
+			# 记录连接
+			test_teleporter_connections[tele_in] = tele_out
+		else:
+			print("⚠ 警告: 颜色 %d 有输入传送门但无对应的输出" % color)
+	
+	print("传送门连接完成: %d 对传送门已连接" % test_teleporter_connections.size())
+
+func connect_switch_to_door(switch: Node2D, door: Node2D):
+	"""连接开关到门"""
+	# 清除开关之前的连接
+	if switch.is_connected("activated", Callable(door, "open")):
+		switch.disconnect("activated", Callable(door, "open"))
+	if switch.is_connected("deactivated", Callable(door, "close")):
+		switch.disconnect("deactivated", Callable(door, "close"))
+	
+	# 建立新连接
+	if door.has_method("open") and door.has_method("close"):
+		if switch.has_signal("activated"):
+			switch.connect("activated", Callable(door, "open"))
+		if switch.has_signal("deactivated"):
+			switch.connect("deactivated", Callable(door, "close"))
+		print("连接建立: %s -> %s" % [switch.name, door.name])
+	else:
+		print("警告: 门 %s 没有 open/close 方法" % door.name)
+
+func connect_teleporters(tele_in: Node2D, tele_out: Node2D):
+	"""连接传送门"""
+	if tele_in.has_method("set_target") and tele_out.has_method("get_position"):
+		tele_in.set_target(tele_out.get_position())
+		print("传送门连接: %s 目标设置为 %s" % [tele_in.name, str(tele_out.get_position())])
+	else:
+		print("警告: 传送门没有相应的方法")
+
+
+
+func cleanup_switch_door_connections():
+	"""清理开关-门连接"""
+	for switch in test_switch_door_connections:
+		if is_instance_valid(switch):
+			for door in test_switch_door_connections[switch]:
+				if is_instance_valid(door):
+					# 断开连接
+					if switch.is_connected("activated", Callable(door, "open")):
+						switch.disconnect("activated", Callable(door, "open"))
+					if switch.is_connected("deactivated", Callable(door, "close")):
+						switch.disconnect("deactivated", Callable(door, "close"))
+	
+	test_switch_door_connections.clear()
+	print("开关-门连接已清理")
+
+func cleanup_teleporter_connections():
+	"""清理传送门连接"""
+	for tele_in in test_teleporter_connections:
+		if is_instance_valid(tele_in) and tele_in.has_method("clear_target"):
+			tele_in.clear_target()
+	
+	test_teleporter_connections.clear()
+	print("传送门连接已清理")
+
+# 在测试模式下处理机关触发
+func handle_test_attack():
+	"""处理测试攻击"""
+	if not test_player or not test_mode_active:
+		return
+	
+	var current_time = Time.get_ticks_msec() / 1000.0
+	if current_time - last_attack_time < test_attack_cooldown:
+		return
+	
+	last_attack_time = current_time
+	
+	# 获取鼠标位置
+	var mouse_pos = get_global_mouse_position()
+	
+	# 计算攻击方向
+	var attack_direction = (mouse_pos - test_player.position).normalized()
+	
+	# 攻击范围
+	var attack_start = test_player.position
+	var attack_end = test_player.position + attack_direction * test_attack_range
+	
+	# 绘制攻击效果
+	draw_attack_effect(attack_start, attack_end)
+	
+	# 检测攻击范围内的机关
+	detect_and_trigger_mechanisms(attack_start, attack_end)
+	
+	print("玩家攻击: 从 %s 到 %s" % [attack_start, attack_end])
+
+
 func enter_test_mode():
 	"""进入测试模式"""
 	# 创建测试玩家
-	create_test_player()
+	#create_test_player()
 	# 设置测试控制
 	setup_test_controls_for_current_character()
+	
+		# 自动连接同颜色的开关和门
+	setup_switch_door_connections()
+	
+	# 自动连接同颜色的传送门
+	setup_teleporter_connections()
+	
 	InputMap.add_action("test_move_left")
 	var event = InputEventKey.new()
 	event.keycode = KEY_A
@@ -1104,7 +1332,9 @@ func exit_test_mode():
 	if test_camera:
 		test_camera.queue_free()
 		test_camera = null
-	
+		# 断开所有连接
+	cleanup_switch_door_connections()
+	cleanup_teleporter_connections()
 	# 恢复编辑器输入映射
 	setup_input_map()
 	
@@ -1230,16 +1460,18 @@ func get_element_data(element: Node2D) -> Dictionary:
 	elif element is Ground:
 		data["type"] = "ground"
 	elif element is Switch:
+		
 		data["type"] = "switch"
-		if element.has_property("door_color"):
-			data["door_color"] = element.door_color
+		if "color" in element:
+			data["color"] = element.color
+			print("  获取开关的color属性: %s" % element.color)
 	elif element is Student:
 		data["type"] = "student"
 	elif element is Door:
 		data["type"] = "door"
-		if element.has_property("door_color"):
-			data["door_color"] = element.door_color
-		if element.has_property("current_state"):
+		if "color" in element:
+			data["color"] = element.color
+		if "current_state" in element:
 			data["state"] = element.current_state
 	
 	elif element is FireTrap:
@@ -1295,7 +1527,7 @@ func create_element(element_type: String, grid_pos: Vector2) -> Node2D:
 	)
 	
 	print("创建元素: 类型=%s, 网格位置=%s, 世界位置=%s, 颜色=%s" % [element_type, grid_pos, world_pos, current_color])
-	
+	var color_name = color_names[current_color_index]
 	match element_type:
 		
 		"student":
@@ -1395,16 +1627,59 @@ func create_element(element_type: String, grid_pos: Vector2) -> Node2D:
 	
 	print("元素实例化失败")
 	return null
-	
 func apply_color_to_element(element: Node2D, element_type: String):
 	"""为元素应用颜色"""
 	# 获取当前颜色
 	var color_value = get_color_value(current_color_index)
+	var color_name = color_names[current_color_index]  # 获取颜色名称
 	
-	print("为元素 %s 应用颜色: %s (索引: %d)" % [element.name, current_color, current_color_index])
+	print("为元素 %s 应用颜色: a%s (索引: %d)" % [element.name, current_color, current_color_index])
 	
 	# 根据不同元素类型和属性设置颜色
-	if element.has_method("set_color"):
+	if element_type == "door":
+		# 先设置 color 属性
+		if "color" in element:
+			element.color = color_name
+			print("  门: 设置color属性(字符串): %s" % color_name)
+		
+		# 然后设置 mechanism_color
+		if "mechanism_color" in element:
+			element.mechanism_color = color_name
+			print("  门: 设置mechanism_color属性: %s" % color_name)
+		
+		# 调用 apply_color_scheme
+		if element.has_method("apply_color_scheme"):
+			element.apply_color_scheme(color_name)
+			print("  门: 调用apply_color_scheme: %s" % color_name)
+		
+		# 更新门的颜色显示
+		if element.has_method("update_door_color"):
+			element.update_door_color()
+			print("  门: 调用update_door_color")
+	# 处理开关元素
+	elif element_type == "switch":
+		# 先设置 color 属性
+		if "color" in element:
+			element.color = color_name
+			print("  开关: 设置color属性(字符串): %s" % color_name)
+		
+		# 然后设置 mechanism_color
+		if "mechanism_color" in element:
+			element.mechanism_color = color_name
+			print("  开关: 设置mechanism_color属性: %s" % color_name)
+		
+		# 调用 apply_color_scheme
+		if element.has_method("apply_color_scheme"):
+			element.apply_color_scheme(color_name)
+			print("  开关: 调用apply_color_scheme: %s" % color_name)
+		
+		# 更新开关的颜色显示
+		if element.has_method("update_label_color"):
+			element.update_label_color()
+			print("  开关: 调用update_label_color")
+			
+			
+	elif element.has_method("set_color"):
 		# 如果元素有set_color方法，传递颜色索引
 		element.set_color(current_color_index)
 		print("  使用set_color方法设置颜色索引: %d" % current_color_index)
@@ -1414,11 +1689,7 @@ func apply_color_to_element(element: Node2D, element_type: String):
 		element.modulate = color_value
 		print("  设置modulate属性: %s" % str(color_value))
 	
-	elif "color" in element:
-		# 如果元素有color属性，设置Color值
-		element.color = color_value
-		print("  设置color属性: %s" % str(color_value))
-	
+
 	elif "door_color" in element:
 		# 如果元素有door_color属性，设置颜色索引
 		element.door_color = current_color_index
@@ -1437,6 +1708,10 @@ func apply_color_to_element(element: Node2D, element_type: String):
 			print("  为子Sprite设置modulate: %s" % str(color_value))
 		else:
 			print("  警告: 无法为元素设置颜色，无合适的颜色属性")
+			
+			
+			
+			
 func get_color_value(color_index: int) -> Color:
 	"""获取颜色索引对应的Color值"""
 	if color_index >= 0 and color_index < color_values.size():
@@ -1619,14 +1894,8 @@ func get_element_bounds(element: Node2D) -> Rect2:
 		# 使用属性名直接检查
 		var width = 1
 		var height = 1
-		
-
 		width = element.grid_width
-
-
 		height = element.grid_height
-
-		
 		bounds.size = Vector2(width * grid_size, height * grid_size)
 	
 	# 如果元素是 Sprite2D，使用纹理大小
@@ -1634,26 +1903,8 @@ func get_element_bounds(element: Node2D) -> Rect2:
 		bounds.size = element.texture.get_size() * element.scale
 	
 	return bounds
-	
-	
-func handle_test_attack():
-	"""处理测试攻击"""
-	if not test_player or not test_mode_active:
-		return
-	
-	var current_time = Time.get_ticks_msec() / 1000.0
-	if current_time - last_attack_time < test_attack_cooldown:
-		return
-	
-	last_attack_time = current_time
-	
-	# 获取鼠标位置
-	var mouse_pos = get_global_mouse_position()
-	
 	# 计算攻击方向
-	var attack_direction = (mouse_pos - test_player.position).normalized()
-	
-	# 攻击范围
+	var attack_direction = (get_global_mouse_position() - test_player.position).normalized()
 	var attack_start = test_player.position
 	var attack_end = test_player.position + attack_direction * test_attack_range
 	
@@ -1698,29 +1949,43 @@ func detect_and_trigger_mechanisms(start: Vector2, end: Vector2):
 		var collider = result.collider
 		
 		# 检查是否是机关
-		if collider is Switch:
+		if collider is Switch or (collider.has_method("is_switch") and collider.is_switch()):
 			collider.interact()
-			print("攻击触发了开关")
-		elif collider is Door:
+			print("攻击触发了开关: %s" % collider.name)
+			
+			# 测试模式下，如果连接了门，门会自动响应
+			if test_switch_door_connections.has(collider):
+				var connected_doors = test_switch_door_connections[collider]
+				for door in connected_doors:
+					if is_instance_valid(door) and door.has_method("toggle"):
+						door.toggle()
+						print("→ 触发连接的门: %s" % door.name)
+		
+		elif collider is Door or (collider.has_method("is_door") and collider.is_door()):
 			if collider.has_method("interact"):
 				collider.interact()
-				print("攻击触发了门")
+				print("攻击触发了门: %s" % collider.name)
+		
 		elif collider is Mechanism:
 			if collider.has_method("activate"):
 				collider.activate()
 				print("攻击触发了机关")
+		
 		elif collider is FireTrap:
 			if collider.has_method("activate"):
 				collider.activate()
 				print("攻击触发了火焰陷阱")
+		
 		elif "Teleporter" in collider.name:
 			if collider.has_method("activate"):
 				collider.activate()
 				print("攻击触发了传送门")
+		
 		elif "Bow" in collider.name:
 			if collider.has_method("shoot"):
 				collider.shoot()
 				print("攻击触发了弓箭")
+
 func _draw():
 	"""绘制网格和当前元素预览"""
 	# 绘制网格背景
