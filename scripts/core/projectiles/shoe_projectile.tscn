@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://0rqo3lkftcgl" path="res://scripts/core/projectiles/shoe_projectile.gd" id="2_y6hsc"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_sjde8"]
-size = Vector2(36, 36)
+size = Vector2(28, 28)
 
 [node name="shoe_projectile" unique_id=1752467600 instance=ExtResource("1_sjde8")]
 collision_layer = 8
@@ -15,6 +15,10 @@ gravity_strength = 600.0
 invincible_time = 0.5
 rotation_speed = 2.0
 bounce_height = 100.0
+
+[node name="Sprite2D" parent="." index="0" unique_id=238013885]
+position = Vector2(-0.25000045, 0.25000054)
+scale = Vector2(0.7361111, 0.7638889)
 
 [node name="CPUParticles2D" parent="." index="3" unique_id=179103400]
 emitting = false

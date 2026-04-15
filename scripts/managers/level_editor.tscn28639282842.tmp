@@ -2,8 +2,5 @@
 
 [ext_resource type="Script" uid="uid://cvjqh27jt6lcd" path="res://scripts/managers/level_editor.gd" id="1_r8385"]
 
-[node name="Node2D" type="Node2D" unique_id=377799198]
+[node name="Node2D" type="CanvasLayer" unique_id=354960466]
 script = ExtResource("1_r8385")
-
-[node name="Camera2D" type="Camera2D" parent="." unique_id=1215371102]
-position = Vector2(636, 360)

@@ -1,4 +1,3 @@
-# res://scripts/elements/mechanism.gd
 extends Area2D
 class_name Mechanism
 
@@ -10,9 +9,6 @@ class_name Mechanism
 @export var is_active: bool = true
 @export var can_be_triggered: bool = true
 @export var cooldown_time: float = 1.0
-@export var grid_width: int = 1  # ← 添加：网格宽度
-@export var grid_height: int = 1  # ← 添加：网格高度
-@export var element_size: int = 32  # ← 添加：元素大小
 
 # 常量
 const CHARACTER_SIZE: int = 24
@@ -22,7 +18,6 @@ const CHARACTER_SIZE: int = 24
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
 @onready var anim_player: AnimationPlayer = $AnimationPlayer
 @onready var audio_player: AudioStreamPlayer2D = $AudioStreamPlayer2D
-@onready var visual_node: Node2D = $VisualNode  # ← 添加：用于控制视觉效果的节点
 
 # 状态变量
 var is_triggered: bool = false
@@ -30,6 +25,8 @@ var is_in_cooldown: bool = false
 var linked_objects: Array = []  # 关联的机关
 var trigger_count: int = 0
 var max_trigger_count: int = 0  # 0表示无限
+const grid_width = 1
+const grid_height = 1
 
 signal mechanism_triggered(mechanism: Mechanism, triggerer: Node2D)
 signal mechanism_reset(mechanism: Mechanism)
@@ -38,46 +35,9 @@ signal mechanism_state_changed(mechanism: Mechanism, new_state: bool)
 func _ready():
 	"""初始化"""
 	print("机关初始化: %s[%s]" % [text, mechanism_color])
-	setup_visual_size()  # ← 先设置尺寸
 	setup_appearance()
 	setup_signals()
 	setup_collision()
-
-func setup_visual_size():
-	"""设置视觉效果的大小"""
-	# 如果没有视觉节点，尝试查找
-	if not visual_node:
-		visual_node = get_node_or_null("ColorRect")
-		if not visual_node:
-			visual_node = get_node_or_null("Sprite2D")
-	
-	# 设置视觉节点大小
-	if visual_node:
-		# 根据网格尺寸计算实际大小
-		var actual_size = Vector2(grid_width * element_size, grid_height * element_size)
-		
-		if visual_node is Node2D:
-			visual_node.size = actual_size
-			# 调整位置使其居中
-			visual_node.position = Vector2(-actual_size.x/2, -actual_size.y/2)
-			print("设置 ColorRect 尺寸: %s" % actual_size)
-		
-		elif visual_node is Sprite2D:
-			# 计算缩放
-			if visual_node.texture:
-				var tex_size = visual_node.texture.get_size()
-				visual_node.scale = Vector2(
-					actual_size.x / tex_size.x,
-					actual_size.y / tex_size.y
-				)
-				print("设置 Sprite2D 缩放: %s, 原纹理大小: %s" % [visual_node.scale, tex_size])
-	
-	# 设置标签位置居中
-	if label:
-		label.position = Vector2.ZERO
-		# 如果标签容器是单独的，也调整其位置
-		if label.get_parent() and label.get_parent() != self:
-			label.get_parent().position = Vector2.ZERO
 
 func setup_appearance():
 	"""设置外观"""
@@ -100,7 +60,8 @@ func setup_appearance():
 		if mechanism_color:
 			apply_color_scheme(mechanism_color)
 		
-		print("机关文字: %s, 颜色: %s, 尺寸: %dx%d" % [text, text_color, grid_width, grid_height])
+		print("机关文字: %s, 颜色: %s" % [text, text_color])
+
 func apply_color_scheme(color_name: String):
 	"""应用颜色方案"""
 	var colors = {

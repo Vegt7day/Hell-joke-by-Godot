@@ -1,0 +1,157 @@
+[gd_scene format=3 uid="uid://d0b0l0v6p0s1j"]
+
+[ext_resource type="Script" uid="uid://bfwfmqxoaruv1" path="res://scripts/managers/level_editor_ui.gd" id="2_istl0"]
+
+[node name="CanvasLayer" type="CanvasLayer" unique_id=1699817117]
+script = ExtResource("2_istl0")
+
+[node name="Control" type="Control" parent="." unique_id=1741960251]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PanelContainer" type="PanelContainer" parent="Control" unique_id=1749296081]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.40300003
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 950.0
+offset_top = -289.16003
+offset_bottom = -510.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Control/PanelContainer" unique_id=783385085]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="文件操作" type="HBoxContainer" parent="Control/PanelContainer/VBoxContainer" unique_id=917640360]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 5
+
+[node name="保存" type="Button" parent="Control/PanelContainer/VBoxContainer/文件操作" unique_id=1474048014]
+layout_mode = 2
+text = "保存"
+
+[node name="加载" type="Button" parent="Control/PanelContainer/VBoxContainer/文件操作" unique_id=1984045232]
+layout_mode = 2
+text = "加载"
+
+[node name="清空" type="Button" parent="Control/PanelContainer/VBoxContainer/文件操作" unique_id=1651927609]
+layout_mode = 2
+text = "清空"
+
+[node name="测试模式" type="Button" parent="Control/PanelContainer/VBoxContainer/文件操作" unique_id=1877536283]
+layout_mode = 2
+text = "测试模式"
+
+[node name="视图操作" type="HBoxContainer" parent="Control/PanelContainer/VBoxContainer" unique_id=1524758382]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 5
+
+[node name="放大" type="Button" parent="Control/PanelContainer/VBoxContainer/视图操作" unique_id=1225129538]
+layout_mode = 2
+text = "放大"
+
+[node name="缩小" type="Button" parent="Control/PanelContainer/VBoxContainer/视图操作" unique_id=2022673793]
+layout_mode = 2
+text = "缩小"
+
+[node name="缩放显示" type="Label" parent="Control/PanelContainer/VBoxContainer/视图操作" unique_id=771970052]
+layout_mode = 2
+size_flags_vertical = 1
+text = "100%"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="元素选择" type="HBoxContainer" parent="Control/PanelContainer/VBoxContainer" unique_id=575086089]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 5
+
+[node name="选择元素" type="OptionButton" parent="Control/PanelContainer/VBoxContainer/元素选择" unique_id=293346255]
+layout_mode = 2
+selected = 0
+item_count = 3
+popup/item_0/id = 0
+popup/item_1/id = 1
+popup/item_2/id = 2
+
+[node name="当前元素" type="Label" parent="Control/PanelContainer/VBoxContainer/元素选择" unique_id=643059746]
+layout_mode = 2
+size_flags_vertical = 1
+text = "当前: 无"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="颜色选择" type="HBoxContainer" parent="Control/PanelContainer/VBoxContainer" unique_id=736042052]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 5
+
+[node name="颜色预览" type="ColorRect" parent="Control/PanelContainer/VBoxContainer/颜色选择" unique_id=410631835]
+layout_mode = 2
+
+[node name="选择颜色" type="OptionButton" parent="Control/PanelContainer/VBoxContainer/颜色选择" unique_id=582632381]
+layout_mode = 2
+selected = 5
+fit_to_longest_item = false
+item_count = 8
+popup/item_0/id = 0
+popup/item_1/id = 1
+popup/item_2/id = 2
+popup/item_3/id = 3
+popup/item_4/id = 4
+popup/item_5/id = 5
+popup/item_6/id = 6
+popup/item_7/id = 7
+
+[node name="信息显示" type="HBoxContainer" parent="Control/PanelContainer/VBoxContainer" unique_id=700310103]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 5
+
+[node name="状态信息" type="Label" parent="Control/PanelContainer/VBoxContainer/信息显示" unique_id=1630463641]
+layout_mode = 2
+size_flags_vertical = 1
+text = "就绪"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="地图大小设置" type="HBoxContainer" parent="Control/PanelContainer/VBoxContainer" unique_id=1070969983]
+layout_mode = 2
+
+[node name="行数" type="Label" parent="Control/PanelContainer/VBoxContainer/地图大小设置" unique_id=1296374001]
+layout_mode = 2
+text = "行数:"
+
+[node name="行数输入" type="LineEdit" parent="Control/PanelContainer/VBoxContainer/地图大小设置" unique_id=1599013800]
+layout_mode = 2
+
+[node name="列数" type="Label" parent="Control/PanelContainer/VBoxContainer/地图大小设置" unique_id=196147616]
+layout_mode = 2
+text = "列数:"
+
+[node name="列数输入" type="LineEdit" parent="Control/PanelContainer/VBoxContainer/地图大小设置" unique_id=458711077]
+layout_mode = 2
+
+[node name="重载地图大小" type="Button" parent="Control/PanelContainer/VBoxContainer/地图大小设置" unique_id=946198381]
+layout_mode = 2
+text = "重载地图大小"

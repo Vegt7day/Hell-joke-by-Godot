@@ -5,7 +5,10 @@
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_pyj27"]
 size = Vector2(28, 28)
 
-[node name="Mechanism" type="Area2D" unique_id=2039559899]
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_vu78w"]
+size = Vector2(28, 28)
+
+[node name="Mechanism" type="Area2D" unique_id=2132526249]
 script = ExtResource("1_vu78w")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=691877437]
@@ -21,3 +24,9 @@ theme_override_font_sizes/font_size = 28
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1173560304]
 
 [node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="." unique_id=216999875]
+
+[node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=101690446]
+collision_mask = 8
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D" unique_id=1885272820]
+shape = SubResource("RectangleShape2D_vu78w")
