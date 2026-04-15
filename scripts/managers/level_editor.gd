@@ -36,6 +36,9 @@ var current_dragging_element: Node2D = null
 var drag_offset: Vector2
 var is_dragging: bool = false
 var selected_element: Node2D = null
+# 在类的变量定义部分添加：
+var mouse_pressed_last_frame = false
+var right_mouse_pressed_last_frame = false
 
 # 区域拖动相关变量
 var is_area_dragging: bool = false
@@ -172,7 +175,7 @@ func update_ui_info():
 	info_label.text = "模式: %s | 元素: %s | 颜色: %s" % [mode_text, element_types[current_element_index], colors[current_color_index]]
 
 func _input(event):
-	"""处理输入"""
+	"""处理输入（只处理键盘）"""
 	# 切换编辑模式
 	if event.is_action_pressed("editor_select_mode"):
 		current_edit_mode = EditMode.SELECT
@@ -229,12 +232,6 @@ func _input(event):
 			handle_mouse_wheel_up(event)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			handle_mouse_wheel_down(event)
-		else:
-			handle_mouse_button(event)
-	
-	# 鼠标移动
-	elif event is InputEventMouseMotion:
-		handle_mouse_motion(event)
 	
 	# 保存/加载
 	elif event.is_action_pressed("editor_save"):
@@ -243,7 +240,8 @@ func _input(event):
 		load_level("user://custom_level.json")
 	elif event.is_action_pressed("editor_clear"):
 		clear_level()
-
+		
+		
 func select_element_type(type_name: String):
 	"""选择元素类型"""
 	current_element_index = element_types.find(type_name)
@@ -294,68 +292,90 @@ func handle_test_mode_mouse(event: InputEventMouseButton):
 	"""处理测试模式下的鼠标事件"""
 	if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		handle_test_attack()
-
 func handle_editor_mouse(event: InputEventMouseButton):
 	"""处理编辑器模式下的鼠标事件"""
 	var mouse_pos = get_global_mouse_position()
 	var grid_pos = world_to_grid(mouse_pos)
 	
+	print("鼠标事件: 按钮=%d, 按下=%s" % [event.button_index, event.pressed])
+	
 	if event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			# 左键按下
+			print("左键按下")
 			handle_left_mouse_press(grid_pos, mouse_pos)
 		else:
 			# 左键释放
+			print("左键释放")
 			handle_left_mouse_release(grid_pos)
 	
 	elif event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
 			# 右键按下
+			print("右键按下")
 			handle_right_mouse_press(grid_pos)
 		else:
 			# 右键释放
+			print("右键释放")
 			handle_right_mouse_release(grid_pos)
-
+			
+			
 func handle_left_mouse_press(grid_pos: Vector2, mouse_pos: Vector2):
 	"""处理左键按下"""
 	print("左键按下，网格位置: %s" % grid_pos)
 	
+	# 简化逻辑：如果是放置模式，就开始拖拽
 	if current_edit_mode == EditMode.PLACE:
-		if current_place_mode == PlaceMode.SINGLE:
-			place_element_at(grid_pos)
-		elif current_place_mode == PlaceMode.AREA:
+		if current_place_mode == PlaceMode.AREA:
+			# 开始区域拖拽
 			is_area_dragging = true
 			area_drag_start = grid_pos
 			area_drag_end = grid_pos
-			print("开始区域选择")
+			print("开始区域拖拽，起始点: %s" % area_drag_start)
+		elif current_place_mode == PlaceMode.SINGLE:
+			# 单点模式：直接放置
+			place_element_at(grid_pos)
 	
 	elif current_edit_mode == EditMode.SELECT:
 		select_element_at(grid_pos)
 	
 	elif current_edit_mode == EditMode.DELETE:
 		delete_element_at(grid_pos)
-
 func handle_left_mouse_release(grid_pos: Vector2):
 	"""处理左键释放"""
-	print("左键释放")
+	print("=== 开始处理左键释放 ===")
+	print("当前状态: is_area_dragging=%s, current_edit_mode=%d" % [is_area_dragging, current_edit_mode])
 	
-	if is_dragging and current_dragging_element:
+	# 如果是区域拖拽
+	if is_area_dragging:
+		print("区域拖拽结束，从 %s 到 %s" % [area_drag_start, area_drag_end])
+		print("当前编辑模式: %s" % ["选择", "放置", "删除", "测试"][current_edit_mode])
+		
+		# 根据当前编辑模式处理
+		if current_edit_mode == EditMode.PLACE:
+			print("放置模式：填充区域")
+			fill_area(area_drag_start, area_drag_end)
+		elif current_edit_mode == EditMode.DELETE:
+			print("删除模式：清除区域")
+			clear_area(area_drag_start, area_drag_end)
+		else:
+			print("警告: 区域拖拽但在非放置/删除模式")
+		
+		# 重置拖拽状态
+		is_area_dragging = false
+		area_rect = Rect2()
+		queue_redraw()
+		print("区域拖拽状态已重置")
+	
+	# 处理元素拖拽
+	elif is_dragging and current_dragging_element:
+		print("结束元素拖拽: %s" % current_dragging_element.name)
 		end_drag()
 		is_dragging = false
 		current_dragging_element = null
 	
-	elif is_area_dragging and current_edit_mode == EditMode.PLACE and current_place_mode == PlaceMode.AREA:
-		# 区域放置：结束区域选择并填充
-		if area_drag_start != area_drag_end:
-			fill_area(area_drag_start, area_drag_end)
-		else:
-			place_element_at(area_drag_start)
+	print("=== 左键释放处理完成 ===")
 		
-		is_area_dragging = false
-		area_rect = Rect2()
-		queue_redraw()
-		print("结束区域选择并填充")
-
 func handle_right_mouse_press(grid_pos: Vector2):
 	"""处理右键按下"""
 	print("右键按下，网格位置: %s" % grid_pos)
@@ -365,64 +385,36 @@ func handle_right_mouse_press(grid_pos: Vector2):
 		is_area_dragging = true
 		area_drag_start = grid_pos
 		area_drag_end = grid_pos
-		print("开始区域清除")
+		print("开始区域清除，起始点: %s" % area_drag_start)
 	
 	elif current_edit_mode == EditMode.PLACE:
 		# 右键点击删除单个元素
+		print("删除单个元素: %s" % grid_pos)
 		delete_element_at(grid_pos)
-
 func handle_right_mouse_release(grid_pos: Vector2):
 	"""处理右键释放"""
-	print("右键释放")
+	print("右键释放，网格位置: %s" % grid_pos)
 	
 	if is_area_dragging and current_edit_mode == EditMode.DELETE:
 		# 区域清除
 		if area_drag_start != area_drag_end:
+			print("区域清除，从 %s 到 %s" % [area_drag_start, area_drag_end])
 			clear_area(area_drag_start, area_drag_end)
 		else:
+			print("单点清除: %s" % area_drag_start)
 			delete_element_at(area_drag_start)
 		
 		is_area_dragging = false
 		area_rect = Rect2()
 		queue_redraw()
 		print("结束区域清除")
-
-func handle_mouse_motion(event: InputEventMouseMotion):
-	"""处理鼠标移动"""
-	var mouse_pos = get_global_mouse_position()
 	
-	# 处理元素拖拽
-	if current_dragging_element:
-		if Input.is_key_pressed(KEY_SHIFT):
-			# Shift键：对齐到网格
-			var grid_pos = world_to_grid(mouse_pos - drag_offset)
-			if is_valid_grid_position(grid_pos):
-				current_dragging_element.position = grid_to_world(grid_pos)
-		elif Input.is_key_pressed(KEY_CTRL):
-			# Ctrl键：自由移动
-			current_dragging_element.position = mouse_pos - drag_offset
-		else:
-			# 默认：自由移动
-			current_dragging_element.position = mouse_pos - drag_offset
-	
-	# 处理区域拖拽
+	# 添加调试：检查是否漏掉了其他情况
 	elif is_area_dragging:
-		var grid_pos = world_to_grid(mouse_pos)
-		if is_valid_grid_position(grid_pos):
-			area_drag_end = grid_pos
-			# 计算区域矩形
-			var start_x = min(area_drag_start.x, area_drag_end.x)
-			var end_x = max(area_drag_start.x, area_drag_end.x)
-			var start_y = min(area_drag_start.y, area_drag_end.y)
-			var end_y = max(area_drag_start.y, area_drag_end.y)
-			
-			area_rect = Rect2(
-				start_x * grid_size,
-				start_y * grid_size,
-				(end_x - start_x + 1) * grid_size,
-				(end_y - start_y + 1) * grid_size
-			)
-			queue_redraw()
+		print("警告: 区域拖拽未正确处理，当前模式: %d" % current_edit_mode)
+		is_area_dragging = false
+		area_rect = Rect2()
+		queue_redraw()
 
 func save_level(path: String):
 	"""保存关卡"""
@@ -536,17 +528,17 @@ func clear_level():
 	queue_redraw()
 	
 	print("关卡已清空")
-
 func fill_area(start: Vector2, end: Vector2):
 	"""填充区域"""
-	if not is_valid_grid_position(start) or not is_valid_grid_position(end):
-		return
+	print("开始填充区域: 从 %s 到 %s" % [start, end])
 	
 	# 计算区域边界
 	var start_x = int(min(start.x, end.x))
 	var end_x = int(max(start.x, end.x))
 	var start_y = int(min(start.y, end.y))
 	var end_y = int(max(start.y, end.y))
+	
+	print("区域范围: x[%d-%d], y[%d-%d]" % [start_x, end_x, start_y, end_y])
 	
 	var filled_count = 0
 	
@@ -555,16 +547,28 @@ func fill_area(start: Vector2, end: Vector2):
 		for y in range(start_y, end_y + 1):
 			var grid_pos = Vector2(x, y)
 			
-			# 检查位置是否有效且未被占用
-			if is_valid_grid_position(grid_pos) and grid[x][y] == null:
-				# 创建元素
-				var element = create_element(current_element_type, grid_pos)
-				if element:
-					grid[x][y] = element
-					filled_count += 1
+			# 检查位置是否有效
+			if is_valid_grid_position(grid_pos):
+				# 检查位置是否已被占用
+				if grid[x][y] == null:
+					# 创建元素
+					var element = create_element(current_element_type, grid_pos)
+					if element:
+						# 添加到网格
+						grid[x][y] = element
+						filled_count += 1
+						print("✓ 在 %s 放置了 %s" % [grid_pos, current_element_type])
+					else:
+						print("✗ 在 %s 创建元素失败" % grid_pos)
+				else:
+					print("✗ 位置 %s 已被占用" % grid_pos)
+			else:
+				print("✗ 无效的网格位置: %s" % grid_pos)
 	
 	print("区域填充完成，共放置 %d 个元素" % filled_count)
-
+	
+	# 更新显示
+	queue_redraw()
 func clear_area(start: Vector2, end: Vector2):
 	"""清除区域内的元素"""
 	if not is_valid_grid_position(start) or not is_valid_grid_position(end):
@@ -1087,23 +1091,41 @@ func end_drag() -> void:
 		# 重置拖拽状态
 		is_dragging = false
 		current_dragging_element = null
-
 func get_element_bounds(element: Node2D) -> Rect2:
 	"""获取元素的边界矩形"""
 	var bounds = Rect2(element.position, Vector2(grid_size, grid_size))
 	
-	# 如果元素有宽度和高度属性，则使用这些属性
-	if element.has_property("grid_width") and element.has_property("grid_height"):
-		var width = element.grid_width
-		var height = element.grid_height
+	# 检查元素是否包含grid_width和grid_height属性
+	if element is Wall or element is Ground or element is Mechanism:
+		# 使用属性名直接检查
+		var width = 1
+		var height = 1
+		
+		# 尝试获取grid_width属性
+		if element.has_property("grid_width"):
+			width = element.grid_width
+		elif element.has_meta("grid_width"):
+			width = element.get_meta("grid_width")
+		elif element.has_method("get_grid_width"):
+			width = element.get_grid_width()
+		
+		# 尝试获取grid_height属性
+		if element.has_property("grid_height"):
+			height = element.grid_height
+		elif element.has_meta("grid_height"):
+			height = element.get_meta("grid_height")
+		elif element.has_method("get_grid_height"):
+			height = element.get_grid_height()
+		
 		bounds.size = Vector2(width * grid_size, height * grid_size)
 	
 	# 如果元素是 Sprite2D，使用纹理大小
-	if element is Sprite2D and element.texture:
+	elif element is Sprite2D and element.texture:
 		bounds.size = element.texture.get_size() * element.scale
 	
 	return bounds
-
+	
+	
 func handle_test_attack():
 	"""处理测试攻击"""
 	if not test_player or not test_mode_active:
@@ -1189,7 +1211,6 @@ func detect_and_trigger_mechanisms(start: Vector2, end: Vector2):
 			if collider.has_method("shoot"):
 				collider.shoot()
 				print("攻击触发了弓箭")
-
 func _draw():
 	"""绘制网格和当前元素预览"""
 	# 绘制网格背景
@@ -1200,7 +1221,7 @@ func _draw():
 			draw_rect(rect, grid_color, true)
 			draw_rect(rect, Color(0.5, 0.5, 0.5, 0.2), false)
 	
-	# 绘制当前元素预览
+	# 绘制当前元素预览（只在放置模式且没有拖拽时显示）
 	if current_edit_mode == EditMode.PLACE and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		var mouse_pos = get_global_mouse_position()
 		var grid_pos = world_to_grid(mouse_pos)
@@ -1208,8 +1229,17 @@ func _draw():
 		if is_valid_grid_position(grid_pos):
 			var preview_color = Color(0, 1, 0, 0.3)
 			
+			# 单点模式：绘制单个格子预览
 			if current_place_mode == PlaceMode.SINGLE:
-				# 单点模式：绘制单个格子预览
+				var preview_rect = Rect2(
+					grid_pos.x * grid_size + 2,
+					grid_pos.y * grid_size + 2,
+					grid_size - 4,
+					grid_size - 4
+				)
+				draw_rect(preview_rect, preview_color, true)
+			# 区域模式：绘制当前格子的预览
+			elif current_place_mode == PlaceMode.AREA:
 				var preview_rect = Rect2(
 					grid_pos.x * grid_size + 2,
 					grid_pos.y * grid_size + 2,
@@ -1239,7 +1269,7 @@ func _draw():
 			)
 	
 	# 绘制区域拖拽预览
-	if is_area_dragging and (current_edit_mode == EditMode.PLACE or current_edit_mode == EditMode.DELETE):
+	if is_area_dragging:
 		var area_color = Color.RED if current_edit_mode == EditMode.DELETE else Color.GREEN
 		area_color.a = 0.3
 		draw_rect(area_rect, area_color, true)
@@ -1295,7 +1325,109 @@ func _draw():
 		
 		# 绘制鼠标位置
 		draw_circle(mouse_pos, 5, Color(1, 1, 0, 0.8))
+		
+func _process(delta):
+	"""主处理函数"""
+	handle_mouse_state()
+	handle_mouse_motion()
+	handle_debug_info()
+	if is_area_dragging:
+		print("区域拖拽状态: 从 %s 到 %s" % [area_drag_start, area_drag_end])
+		print("当前模式: %d, 放置模式: %d" % [current_edit_mode, current_place_mode])
 
+func handle_mouse_state():
+	"""处理鼠标状态"""
+	var mouse_pos = get_global_mouse_position()
+	var grid_pos = world_to_grid(mouse_pos)
+	
+	# 左键状态
+	var left_pressed = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	
+	# 检测左键按下
+	if left_pressed and not mouse_pressed_last_frame:
+		print("鼠标左键按下 (位置: %s)" % grid_pos)
+		handle_left_mouse_press(grid_pos, mouse_pos)
+	
+	# 检测左键释放
+	elif not left_pressed and mouse_pressed_last_frame:
+		print("鼠标左键释放 (位置: %s)" % grid_pos)
+		handle_left_mouse_release(grid_pos)
+	
+	# 右键状态
+	var right_pressed = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+	
+	# 检测右键按下
+	if right_pressed and not right_mouse_pressed_last_frame:
+		print("鼠标右键按下 (位置: %s)" % grid_pos)
+		handle_right_mouse_press(grid_pos)
+	
+	# 检测右键释放
+	elif not right_pressed and right_mouse_pressed_last_frame:
+		print("鼠标右键释放 (位置: %s)" % grid_pos)
+		handle_right_mouse_release(grid_pos)
+	
+	# 更新状态
+	mouse_pressed_last_frame = left_pressed
+	right_mouse_pressed_last_frame = right_pressed
+
+func handle_mouse_motion():
+	"""处理鼠标移动"""
+	# 如果是区域拖拽，更新区域
+	if is_area_dragging:
+		var mouse_pos = get_global_mouse_position()
+		var grid_pos = world_to_grid(mouse_pos)
+		
+		if is_valid_grid_position(grid_pos):
+			area_drag_end = grid_pos
+			
+			# 计算区域矩形
+			var start_x = min(area_drag_start.x, area_drag_end.x)
+			var end_x = max(area_drag_start.x, area_drag_end.x)
+			var start_y = min(area_drag_start.y, area_drag_end.y)
+			var end_y = max(area_drag_start.y, area_drag_end.y)
+			
+			# 创建区域矩形
+			area_rect = Rect2(
+				start_x * grid_size,
+				start_y * grid_size,
+				(end_x - start_x + 1) * grid_size,
+				(end_y - start_y + 1) * grid_size
+			)
+			
+			# 强制重绘
+			queue_redraw()
+	
+	# 如果是元素拖拽
+	elif current_dragging_element:
+		var mouse_pos = get_global_mouse_position()
+		
+		if Input.is_key_pressed(KEY_SHIFT):
+			# Shift键：对齐到网格
+			var grid_pos = world_to_grid(mouse_pos - drag_offset)
+			if is_valid_grid_position(grid_pos):
+				current_dragging_element.position = grid_to_world(grid_pos)
+		elif Input.is_key_pressed(KEY_CTRL):
+			# Ctrl键：自由移动
+			current_dragging_element.position = mouse_pos - drag_offset
+		else:
+			# 默认：自由移动
+			current_dragging_element.position = mouse_pos - drag_offset
+			
+var debug_last_print_time = 0	
+func handle_debug_info():
+	"""处理调试信息"""
+	var current_time = Time.get_ticks_msec()
+	
+	# 每秒打印一次调试信息
+	if current_time - debug_last_print_time > 1000:
+		if is_area_dragging:
+			print("调试: 持续区域拖拽中, 从 %s 到 %s, 模式=%s" % [
+				area_drag_start, 
+				area_drag_end,
+				["选择", "放置", "删除", "测试"][current_edit_mode]
+			])
+		debug_last_print_time = current_time
+		
 func setup_input_map():
 	"""设置输入映射"""
 	# 清除现有输入映射
