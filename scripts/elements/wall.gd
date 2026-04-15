@@ -12,8 +12,11 @@ func _ready():
 	print("墙初始化: %s" % name)
 	
 	# 设置碰撞层
-	set_collision_layer_value(4, true)  # 第3层：墙壁
-	set_collision_mask_value(1, true)   # 与玩家（第1层）碰撞
+	set_collision_layer_value(2, true)  
+	set_collision_mask_value(1, true)   
+	
+	# 将墙添加到"wall"组
+	add_to_group("wall")
 	
 	# 设置碰撞形状大小
 	var collision_shape = $CollisionShape2D
@@ -28,7 +31,7 @@ func _ready():
 	
 	print("墙初始化完成: %s, 碰撞层: %d, 碰撞掩码: %d" % [name, collision_layer, collision_mask])
 
-func take_damage(damage: int, attacker: Node2D = null):
+func take_damage(damage: int, attacker: Variant  = null):
 	"""墙受到伤害"""
 	if is_destructible:
 		health -= damage

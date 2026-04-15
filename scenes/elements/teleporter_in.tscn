@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://d3g202bq5trsg"]
+
+[ext_resource type="PackedScene" uid="uid://ldsrn7cbqssl" path="res://scenes/elements/base_mechanism.tscn" id="1_qsi4g"]
+[ext_resource type="Script" uid="uid://cco2e8qfuagsf" path="res://scripts/elements/teleporter_in.gd" id="2_8h4bu"]
+
+[node name="Mechanism" unique_id=2132526249 instance=ExtResource("1_qsi4g")]
+script = ExtResource("2_8h4bu")
+
+[node name="label" parent="." index="1" unique_id=1899630671]
+offset_left = -15.0
+offset_top = -21.0
+offset_right = 41.0
+offset_bottom = 34.0
+theme_override_font_sizes/font_size = 30
+text = "传"

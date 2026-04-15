@@ -63,15 +63,14 @@ func on_player_exited(player: Node2D):
 		print("玩家离开滑面")
 
 # 地面可以接收子弹击中，但默认不处理
-func take_damage(damage: int, attacker: Node2D = null):
+func take_damage(damage: int, attacker: Variant = null):
 	"""地面受到伤害（可选，地面通常不可破坏）"""
-	print("地面被攻击: %s, 但地面通常不可破坏" % name)
+	print("地面被攻击: %s, 伤害: %d, 攻击者: %s" % [name, damage, attacker])
 	
 	# 地面可以被设置为可破坏，但默认不破坏
 	# 如果需要可破坏地面，可以添加相关逻辑
 	# 例如：播放地面受击效果
 	play_hit_effect()
-
 func play_hit_effect():
 	"""播放受击效果"""
 	var sprite = $Sprite2D
