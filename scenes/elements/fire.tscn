@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://3ijuoxu6sfv0"]
+
+[ext_resource type="PackedScene" uid="uid://ldsrn7cbqssl" path="res://scenes/elements/base_mechanism.tscn" id="1_tc6d7"]
+[ext_resource type="Script" uid="uid://sbierulwafnl" path="res://scripts/elements/fire.gd" id="2_355t1"]
+
+[node name="fire" unique_id=2039559899 instance=ExtResource("1_tc6d7")]
+script = ExtResource("2_355t1")
+damage = 1
+damage_interval = 0.5
+is_permanent = true
+
+[node name="机关文字" parent="." index="1" unique_id=1899630671]
+offset_top = -6.0
+offset_bottom = 49.0
+text = "火"

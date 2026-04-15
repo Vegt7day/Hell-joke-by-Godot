@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://dtn5jafqbrhwl"]
+
+[ext_resource type="PackedScene" uid="uid://ldsrn7cbqssl" path="res://scenes/elements/base_mechanism.tscn" id="1_f772o"]
+[ext_resource type="Script" uid="uid://ea5u7nqr3ah1" path="res://scripts/elements/switch.gd" id="2_jwosh"]
+
+[node name="switch" unique_id=2039559899 instance=ExtResource("1_f772o")]
+script = ExtResource("2_jwosh")
+door_color = ""
+is_toggle = true
+is_pressure_plate = false
+require_stay = false
+
+[node name="CollisionShape2D" parent="." index="0" unique_id=691877437]
+position = Vector2(12, 11.5)
+
+[node name="机关文字" parent="." index="1" unique_id=1899630671]
+offset_left = 0.0
+offset_top = -6.0
+offset_right = 56.0
+offset_bottom = 50.0
+theme_override_font_sizes/font_size = 28
+text = "开"

@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://naciuvnisjgx"]
+
+[ext_resource type="PackedScene" uid="uid://cp6x8pgebpi28" path="res://scenes/elements/base_rect_element.tscn" id="1_05gcc"]
+[ext_resource type="Script" uid="uid://2ch6enqfw4og" path="res://scripts/elements/ground.gd" id="2_sdwwd"]
+
+[node name="ground" unique_id=675973655 instance=ExtResource("1_05gcc")]
+script = ExtResource("2_sdwwd")
+
+[node name="中心文字" parent="TextContainer" parent_id_path=PackedInt32Array(1329111378) index="0" unique_id=1931133877]
+offset_left = -19.0
+offset_right = 23.0
+offset_bottom = 26.0
+theme_override_font_sizes/font_size = 38
+text = "地"

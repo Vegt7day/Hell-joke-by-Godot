@@ -1,0 +1,19 @@
+[gd_scene format=3 uid="uid://bylfbcayuq6tr"]
+
+[ext_resource type="PackedScene" uid="uid://ldsrn7cbqssl" path="res://scenes/elements/base_mechanism.tscn" id="1_e708x"]
+[ext_resource type="Script" uid="uid://dfuixh6e2jfmf" path="res://scripts/elements/door.gd" id="2_r8hfh"]
+
+[node name="door" unique_id=2039559899 instance=ExtResource("1_e708x")]
+script = ExtResource("2_r8hfh")
+door_color = ""
+initial_state = 0
+is_locked = false
+required_keys = 0
+auto_close_delay = 0.0
+slide_distance = 32.0
+
+[node name="机关文字" parent="." index="1" unique_id=1899630671]
+offset_top = -7.0
+offset_right = 58.0
+offset_bottom = 53.0
+text = "门"

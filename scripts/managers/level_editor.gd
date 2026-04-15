@@ -65,27 +65,27 @@ func load_scenes():
 	"""加载场景"""
 	# 如果没有设置，尝试自动加载
 	if not wall_scene:
-		wall_scene = load("res://scenes/elements/walls/wall.tscn")
+		wall_scene = load("res://scenes/elements/wall.tscn")
 	if not ground_scene:
-		ground_scene = load("res://scenes/elements/walls/ground.tscn")
+		ground_scene = load("res://scenes/elements/ground.tscn")
 	if not fire_scene:
-		fire_scene = load("res://scenes/elements/traps/fire.tscn")
+		fire_scene = load("res://scenes/elements/fire.tscn")
 	if not goal_scene:
-		goal_scene = load("res://scenes/elements/goals/goal.tscn")
+		goal_scene = load("res://scenes/elements/goal.tscn")
 	if not switch_scene:
-		switch_scene = load("res://scenes/elements/mechanisms/switch/switch.tscn")
+		switch_scene = load("res://scenes/elements/switch.tscn")
 	if not door_scene:
-		door_scene = load("res://scenes/elements/mechanisms/door/door.tscn")
+		door_scene = load("res://scenes/elements/door.tscn")
 	if not teleporter_in_scene:
-		teleporter_in_scene = load("res://scenes/elements/mechanisms/teleporter/teleporter_in.tscn")
+		teleporter_in_scene = load("res://scenes/elements/teleporter/teleporter_in.tscn")
 	if not teleporter_out_scene:
-		teleporter_out_scene = load("res://scenes/elements/mechanisms/teleporter/teleporter_out.tscn")
+		teleporter_out_scene = load("res://scenes/elements/teleporter/teleporter_out.tscn")
 	if not bow_scene:
-		bow_scene = load("res://scenes/elements/mechanisms/bow/bow.tscn")
+		bow_scene = load("res://scenes/elements/bow.tscn")
 	if not dirt_scene:
-		dirt_scene = load("res://scenes/elements/mechanisms/dirt/dirt.tscn")
+		dirt_scene = load("res://scenes/elements/dirt.tscn")
 	if not player_scene:
-		player_scene = load("res://scenes/player/player.tscn")
+		player_scene = load("res://scenes/elements/player.tscn")
 
 func init_grid():
 	"""初始化网格"""
