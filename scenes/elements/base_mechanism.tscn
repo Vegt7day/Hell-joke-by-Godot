@@ -9,12 +9,13 @@ size = Vector2(28, 28)
 script = ExtResource("1_vu78w")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=691877437]
-position = Vector2(14, 14)
 shape = SubResource("RectangleShape2D_pyj27")
 
 [node name="label" type="Label" parent="." unique_id=1899630671]
-offset_right = 56.0
-offset_bottom = 55.0
+offset_left = -28.0
+offset_top = -27.0
+offset_right = 28.0
+offset_bottom = 28.0
 theme_override_font_sizes/font_size = 28
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1173560304]

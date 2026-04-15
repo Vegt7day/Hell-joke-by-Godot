@@ -1,24 +1,19 @@
 [gd_scene format=3 uid="uid://chefjh7y2wx0g"]
 
-[ext_resource type="PackedScene" uid="uid://cp6x8pgebpi28" path="res://scenes/elements/base_rect_element.tscn" id="1_6v3t3"]
-[ext_resource type="Script" uid="uid://b8ory8jom7705" path="res://scripts/elements/wall.gd" id="2_c8uqr"]
+[ext_resource type="PackedScene" uid="uid://ldsrn7cbqssl" path="res://scenes/elements/base_mechanism.tscn" id="1_6v3t3"]
+[ext_resource type="Script" uid="uid://dbacbwpi7nqam" path="res://scripts/elements/wall.gd" id="2_c8uqr"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_c8uqr"]
-size = Vector2(36, 36)
-
-[node name="wall" unique_id=675973655 instance=ExtResource("1_6v3t3")]
+[node name="wall" unique_id=2039559899 instance=ExtResource("1_6v3t3")]
 script = ExtResource("2_c8uqr")
+is_destructible = false
+health = 3
+breaks_into_dust = false
+dust_amount = 3
 
-[node name="VisibleOnScreenNotifier2D" parent="." index="0" unique_id=1242351982]
-rect = Rect2(-18, -18, 36, 36)
-
-[node name="中心文字" parent="TextContainer" parent_id_path=PackedInt32Array(1329111378) index="0" unique_id=1931133877]
-offset_left = -20.0
-offset_top = -28.0
-offset_right = 22.0
-offset_bottom = 27.0
-theme_override_font_sizes/font_size = 40
-text = "墙"
-
-[node name="CollisionShape2D" parent="Area2D" parent_id_path=PackedInt32Array(796566905) index="0" unique_id=636447949]
-shape = SubResource("RectangleShape2D_c8uqr")
+[node name="label" parent="." index="1" unique_id=1899630671]
+offset_left = -15.0
+offset_top = -22.0
+offset_right = 41.0
+offset_bottom = 33.0
+theme_override_font_sizes/font_size = 31
+text = "		墙"

@@ -10,10 +10,13 @@ initial_state = 0
 is_locked = false
 required_keys = 0
 auto_close_delay = 0.0
-slide_distance = 32.0
+open_height = 32.0
+door_scale = Vector2(1, 0.5)
+animation_duration = 0.5
 
-[node name="机关文字" parent="." index="1" unique_id=1899630671]
-offset_top = -7.0
-offset_right = 58.0
-offset_bottom = 53.0
+[node name="label" parent="." index="1" unique_id=1899630671]
+offset_left = -14.0
+offset_top = -21.0
+offset_right = 72.0
+offset_bottom = 39.0
 text = "门"

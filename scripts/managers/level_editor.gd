@@ -5,7 +5,6 @@ class_name LevelEditor
 @export var level_width: int = 20
 @export var level_height: int = 15
 @export var grid_size: int = 32
-@export var char_size: int = 24
 
 # 场景引用
 @export var wall_scene: PackedScene
@@ -21,31 +20,49 @@ class_name LevelEditor
 @export var player_scene: PackedScene
 
 # 编辑模式
-enum EditMode {
-	SELECT,
-	PLACE,
-	DELETE
-}
+enum EditMode { SELECT, PLACE, DELETE, TEST }
+enum PlaceMode { SINGLE, AREA }
 
 @export var current_edit_mode: EditMode = EditMode.PLACE
+@export var current_place_mode: PlaceMode = PlaceMode.SINGLE
 @export var current_element_type: String = "wall"
-@export var current_element_name: String = "brick"
 
 # 关卡数据
 var level_data: Dictionary = {}
 var elements: Array = []
 var grid: Array = []
-var player_start_position: Vector2 = Vector2(64, 384)  # 默认位置
+var player_start_position: Vector2 = Vector2(64, 384)
 var current_dragging_element: Node2D = null
-var drag_start_pos: Vector2
 var drag_offset: Vector2
 var is_dragging: bool = false
 var selected_element: Node2D = null
-var drag_start_grid_pos: Vector2  # 添加这个变量
+
+# 区域拖动相关变量
+var is_area_dragging: bool = false
+var area_drag_start: Vector2
+var area_drag_end: Vector2
+var area_rect: Rect2
+
+# 元素类型列表
+var element_types: Array = ["wall", "ground", "switch", "door", "fire", "player", "goal", "teleporter_in", "teleporter_out", "bow", "dirt"]
+var current_element_index: int = 0
 
 # 颜色定义
-var colors: Array = ["红", "绿", "蓝", "黄", "紫", "青"]
+var colors: Array = ["红", "绿", "蓝", "黄", "紫", "青", "白", "黑"]
 var current_color: String = "红"
+var current_color_index: int = 0
+
+# 测试模式相关
+var test_mode_active: bool = false
+var test_player: CharacterBody2D = null
+var test_camera: Camera2D = null
+var test_attack_range: float = 100.0
+var test_attack_cooldown: float = 0.5
+var last_attack_time: float = 0.0
+
+# UI相关
+var info_label: Label
+var test_mode_label: Label
 
 func _ready():
 	"""初始化编辑器"""
@@ -53,13 +70,24 @@ func _ready():
 	load_scenes()
 	init_grid()
 	
-	# 连接输入信号
-	get_viewport().gui_focus_changed.connect(_on_gui_focus_changed)
+	# 创建UI元素
+	create_ui()
+	
+	# 设置输入映射
+	setup_input_map()
+	
+	# 确保能接收输入
+	set_process_input(true)
+	set_process(true)
 	
 	print("地图编辑器准备就绪")
-	print("快捷键: W-放置模式, Q-选择模式, E-删除模式")
-	print("数字键1-7选择元素类型, R/G/B选择颜色")
-	print("Ctrl+S保存, Ctrl+L加载, Ctrl+C清空")
+
+func _on_gui_focus_changed(control: Control):
+	"""GUI焦点变化时处理"""
+	if control and control.get_parent() and control.get_parent().name == "PropertyPanel":
+		is_dragging = false
+		current_dragging_element = null
+		print("焦点变化，暂停拖拽操作")
 
 func load_scenes():
 	"""加载场景"""
@@ -77,9 +105,9 @@ func load_scenes():
 	if not door_scene:
 		door_scene = load("res://scenes/elements/door.tscn")
 	if not teleporter_in_scene:
-		teleporter_in_scene = load("res://scenes/elements/teleporter/teleporter_in.tscn")
+		teleporter_in_scene = load("res://scenes/elements/teleporter_in.tscn")
 	if not teleporter_out_scene:
-		teleporter_out_scene = load("res://scenes/elements/teleporter/teleporter_out.tscn")
+		teleporter_out_scene = load("res://scenes/elements/teleporter_out.tscn")
 	if not bow_scene:
 		bow_scene = load("res://scenes/elements/bow.tscn")
 	if not dirt_scene:
@@ -95,435 +123,306 @@ func init_grid():
 		for y in range(level_height):
 			grid[x].append(null)
 
+func create_ui():
+	"""创建UI元素"""
+	# 信息标签
+	info_label = Label.new()
+	info_label.name = "InfoLabel"
+	info_label.text = "编辑器已就绪"
+	info_label.position = Vector2(10, 10)
+	info_label.add_theme_color_override("font_color", Color.WHITE)
+	info_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	info_label.add_theme_constant_override("outline_size", 2)
+	add_child(info_label)
+	
+	# 测试模式标签
+	test_mode_label = Label.new()
+	test_mode_label.name = "TestModeLabel"
+	test_mode_label.text = "测试模式: 关闭"
+	test_mode_label.position = Vector2(10, 40)
+	test_mode_label.add_theme_color_override("font_color", Color.RED)
+	test_mode_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	test_mode_label.add_theme_constant_override("outline_size", 2)
+	test_mode_label.visible = false
+	add_child(test_mode_label)
+	
+	update_ui_info()
+
+func update_ui_info():
+	"""更新UI信息"""
+	if not info_label:
+		return
+	
+	var mode_text = ""
+	match current_edit_mode:
+		EditMode.SELECT:
+			mode_text = "选择模式"
+		EditMode.PLACE:
+			mode_text = "放置模式"
+			match current_place_mode:
+				PlaceMode.SINGLE:
+					mode_text += " (单点)"
+				PlaceMode.AREA:
+					mode_text += " (区域)"
+		EditMode.DELETE:
+			mode_text = "删除模式"
+		EditMode.TEST:
+			mode_text = "测试模式"
+	
+	info_label.text = "模式: %s | 元素: %s | 颜色: %s" % [mode_text, element_types[current_element_index], colors[current_color_index]]
+
 func _input(event):
 	"""处理输入"""
 	# 切换编辑模式
 	if event.is_action_pressed("editor_select_mode"):
 		current_edit_mode = EditMode.SELECT
+		update_ui_info()
 		print("切换到选择模式")
 	
 	elif event.is_action_pressed("editor_place_mode"):
 		current_edit_mode = EditMode.PLACE
+		update_ui_info()
 		print("切换到放置模式")
 	
 	elif event.is_action_pressed("editor_delete_mode"):
 		current_edit_mode = EditMode.DELETE
+		update_ui_info()
 		print("切换到删除模式")
+	
+	elif event.is_action_pressed("editor_toggle_test"):
+		toggle_test_mode()
+	
+	# 切换放置模式
+	elif event.is_action_pressed("editor_toggle_area_mode"):
+		if current_edit_mode == EditMode.PLACE:
+			current_place_mode = PlaceMode.AREA if current_place_mode == PlaceMode.SINGLE else PlaceMode.SINGLE
+			update_ui_info()
+			print("切换放置模式: %s" % ("区域" if current_place_mode == PlaceMode.AREA else "单点"))
 	
 	# 切换元素类型
 	elif event.is_action_pressed("element_wall"):
-		current_element_type = "wall"
-		current_element_name = "brick"
-		print("选择元素: 墙")
-	
+		select_element_type("wall")
 	elif event.is_action_pressed("element_ground"):
-		current_element_type = "ground"
-		current_element_name = ""
-		print("选择元素: 地面")
-	
+		select_element_type("ground")
 	elif event.is_action_pressed("element_switch"):
-		current_element_type = "switch"
-		current_element_name = ""
-		print("选择元素: 开关")
-	
+		select_element_type("switch")
 	elif event.is_action_pressed("element_door"):
-		current_element_type = "door"
-		current_element_name = ""
-		print("选择元素: 门")
-	
+		select_element_type("door")
 	elif event.is_action_pressed("element_fire"):
-		current_element_type = "fire"
-		current_element_name = ""
-		print("选择元素: 火焰陷阱")
-	
+		select_element_type("fire")
 	elif event.is_action_pressed("element_player"):
-		current_element_type = "player"
-		current_element_name = ""
-		print("选择元素: 玩家")
-	
+		select_element_type("player")
 	elif event.is_action_pressed("element_goal"):
-		current_element_type = "goal"
-		current_element_name = ""
-		print("选择元素: 终点")
+		select_element_type("goal")
+	elif event.is_action_pressed("element_teleporter_in"):
+		select_element_type("teleporter_in")
+	elif event.is_action_pressed("element_teleporter_out"):
+		select_element_type("teleporter_out")
+	elif event.is_action_pressed("element_bow"):
+		select_element_type("bow")
+	elif event.is_action_pressed("element_dirt"):
+		select_element_type("dirt")
 	
-	# 切换颜色
-	elif event.is_action_pressed("color_red"):
-		current_color = "红"
-		print("选择颜色: 红")
+	# 鼠标滚轮切换元素类型
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			handle_mouse_wheel_up(event)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			handle_mouse_wheel_down(event)
+		else:
+			handle_mouse_button(event)
 	
-	elif event.is_action_pressed("color_green"):
-		current_color = "绿"
-		print("选择颜色: 绿")
-	
-	elif event.is_action_pressed("color_blue"):
-		current_color = "蓝"
-		print("选择颜色: 蓝")
+	# 鼠标移动
+	elif event is InputEventMouseMotion:
+		handle_mouse_motion(event)
 	
 	# 保存/加载
 	elif event.is_action_pressed("editor_save"):
 		save_level("user://custom_level.json")
-	
 	elif event.is_action_pressed("editor_load"):
 		load_level("user://custom_level.json")
-	
 	elif event.is_action_pressed("editor_clear"):
 		clear_level()
-	
-	# 鼠标输入
-	elif event is InputEventMouseButton:
-		handle_mouse_input(event)
-	
-	# 鼠标移动
-	elif event is InputEventMouseMotion and is_dragging:
-		handle_mouse_drag(event)
 
-func handle_mouse_input(event: InputEventMouseButton):
-	"""处理鼠标输入"""
+func select_element_type(type_name: String):
+	"""选择元素类型"""
+	current_element_index = element_types.find(type_name)
+	if current_element_index != -1:
+		current_element_type = element_types[current_element_index]
+		update_ui_info()
+		print("选择元素: %s" % current_element_type)
+		queue_redraw()
+
+func handle_mouse_wheel_up(event: InputEventMouseButton):
+	"""处理鼠标滚轮上滚"""
+	if event.shift_pressed:
+		# Shift+滚轮：切换颜色
+		current_color_index = (current_color_index - 1) % colors.size()
+		current_color = colors[current_color_index]
+		print("切换到颜色: %s" % current_color)
+	else:
+		# 向上滚轮：切换到上一个元素类型
+		current_element_index = (current_element_index - 1) % element_types.size()
+		current_element_type = element_types[current_element_index]
+		print("切换到元素: %s" % current_element_type)
+	update_ui_info()
+	queue_redraw()
+
+func handle_mouse_wheel_down(event: InputEventMouseButton):
+	"""处理鼠标滚轮下滚"""
+	if event.shift_pressed:
+		# Shift+滚轮：切换颜色
+		current_color_index = (current_color_index + 1) % colors.size()
+		current_color = colors[current_color_index]
+		print("切换到颜色: %s" % current_color)
+	else:
+		# 向下滚轮：切换到下一个元素类型
+		current_element_index = (current_element_index + 1) % element_types.size()
+		current_element_type = element_types[current_element_index]
+		print("切换到元素: %s" % current_element_type)
+	update_ui_info()
+	queue_redraw()
+
+func handle_mouse_button(event: InputEventMouseButton):
+	"""处理鼠标按钮事件"""
+	if test_mode_active:
+		handle_test_mode_mouse(event)
+	else:
+		handle_editor_mouse(event)
+
+func handle_test_mode_mouse(event: InputEventMouseButton):
+	"""处理测试模式下的鼠标事件"""
+	if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		handle_test_attack()
+
+func handle_editor_mouse(event: InputEventMouseButton):
+	"""处理编辑器模式下的鼠标事件"""
 	var mouse_pos = get_global_mouse_position()
 	var grid_pos = world_to_grid(mouse_pos)
 	
-	if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		# 左键按下
-		if current_edit_mode == EditMode.PLACE:
-			# 放置模式
-			place_element_at(grid_pos)
-		
-		elif current_edit_mode == EditMode.SELECT:
-			# 选择模式
-			select_element_at(grid_pos)
-		
-		elif current_edit_mode == EditMode.DELETE:
-			# 删除模式
-			delete_element_at(grid_pos)
+	if event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			# 左键按下
+			handle_left_mouse_press(grid_pos, mouse_pos)
+		else:
+			# 左键释放
+			handle_left_mouse_release(grid_pos)
 	
-	elif event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
-		# 左键释放
-		if is_dragging and current_dragging_element:
-			end_drag()
-			is_dragging = false
-			current_dragging_element = null
-	
-	elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-		# 右键点击
-		if current_edit_mode == EditMode.DELETE:
-			delete_element_at(grid_pos)
+	elif event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.pressed:
+			# 右键按下
+			handle_right_mouse_press(grid_pos)
+		else:
+			# 右键释放
+			handle_right_mouse_release(grid_pos)
 
-func handle_mouse_drag(event: InputEventMouseMotion):
-	"""处理鼠标拖拽"""
-	if current_dragging_element:
-		var mouse_pos = get_global_mouse_position()
+func handle_left_mouse_press(grid_pos: Vector2, mouse_pos: Vector2):
+	"""处理左键按下"""
+	print("左键按下，网格位置: %s" % grid_pos)
+	
+	if current_edit_mode == EditMode.PLACE:
+		if current_place_mode == PlaceMode.SINGLE:
+			place_element_at(grid_pos)
+		elif current_place_mode == PlaceMode.AREA:
+			is_area_dragging = true
+			area_drag_start = grid_pos
+			area_drag_end = grid_pos
+			print("开始区域选择")
+	
+	elif current_edit_mode == EditMode.SELECT:
+		select_element_at(grid_pos)
+	
+	elif current_edit_mode == EditMode.DELETE:
+		delete_element_at(grid_pos)
+
+func handle_left_mouse_release(grid_pos: Vector2):
+	"""处理左键释放"""
+	print("左键释放")
+	
+	if is_dragging and current_dragging_element:
+		end_drag()
+		is_dragging = false
+		current_dragging_element = null
+	
+	elif is_area_dragging and current_edit_mode == EditMode.PLACE and current_place_mode == PlaceMode.AREA:
+		# 区域放置：结束区域选择并填充
+		if area_drag_start != area_drag_end:
+			fill_area(area_drag_start, area_drag_end)
+		else:
+			place_element_at(area_drag_start)
 		
+		is_area_dragging = false
+		area_rect = Rect2()
+		queue_redraw()
+		print("结束区域选择并填充")
+
+func handle_right_mouse_press(grid_pos: Vector2):
+	"""处理右键按下"""
+	print("右键按下，网格位置: %s" % grid_pos)
+	
+	if current_edit_mode == EditMode.DELETE:
+		# 右键拖拽清除区域
+		is_area_dragging = true
+		area_drag_start = grid_pos
+		area_drag_end = grid_pos
+		print("开始区域清除")
+	
+	elif current_edit_mode == EditMode.PLACE:
+		# 右键点击删除单个元素
+		delete_element_at(grid_pos)
+
+func handle_right_mouse_release(grid_pos: Vector2):
+	"""处理右键释放"""
+	print("右键释放")
+	
+	if is_area_dragging and current_edit_mode == EditMode.DELETE:
+		# 区域清除
+		if area_drag_start != area_drag_end:
+			clear_area(area_drag_start, area_drag_end)
+		else:
+			delete_element_at(area_drag_start)
+		
+		is_area_dragging = false
+		area_rect = Rect2()
+		queue_redraw()
+		print("结束区域清除")
+
+func handle_mouse_motion(event: InputEventMouseMotion):
+	"""处理鼠标移动"""
+	var mouse_pos = get_global_mouse_position()
+	
+	# 处理元素拖拽
+	if current_dragging_element:
 		if Input.is_key_pressed(KEY_SHIFT):
 			# Shift键：对齐到网格
 			var grid_pos = world_to_grid(mouse_pos - drag_offset)
 			if is_valid_grid_position(grid_pos):
-				current_dragging_element.position = grid_pos * grid_size
+				current_dragging_element.position = grid_to_world(grid_pos)
 		elif Input.is_key_pressed(KEY_CTRL):
 			# Ctrl键：自由移动
 			current_dragging_element.position = mouse_pos - drag_offset
 		else:
 			# 默认：自由移动
 			current_dragging_element.position = mouse_pos - drag_offset
-
-func place_element_at(grid_pos: Vector2):
-	"""在网格位置放置元素"""
-	if not is_valid_grid_position(grid_pos):
-		return
 	
-	# 检查位置是否已被占用
-	if grid[grid_pos.x][grid_pos.y] != null:
-		print("位置已被占用")
-		return
-	
-	# 创建元素
-	var element = create_element(current_element_type, current_element_name, grid_pos)
-	if element:
-		# 添加到网格
-		grid[grid_pos.x][grid_pos.y] = element
-		
-		print("在 %s 放置 %s" % [grid_pos, current_element_type])
-
-func create_element(element_type: String, element_name: String, grid_pos: Vector2) -> Node2D:
-	"""创建元素实例"""
-	var position = grid_pos * grid_size
-	var element: Node2D = null
-	
-	match element_type:
-		"wall":
-			element = wall_scene.instantiate() as RectElement
-			if element:
-				element.grid_width = 1
-				element.grid_height = 1
-		
-		"ground":
-			element = ground_scene.instantiate() as RectElement
-			if element:
-				element.grid_width = 1
-				element.grid_height = 1
-		
-		"fire":
-			element = fire_scene.instantiate()
-		
-		"switch":
-			element = switch_scene.instantiate() as Switch
-			if element:
-				element.door_color = current_color
-		
-		"door":
-			element = door_scene.instantiate() as Door
-			if element:
-				element.door_color = current_color
-		
-		"teleporter_in":
-			element = teleporter_in_scene.instantiate()
-		
-		"teleporter_out":
-			element = teleporter_out_scene.instantiate()
-		
-		"bow":
-			element = bow_scene.instantiate()
-		
-		"dirt":
-			element = dirt_scene.instantiate()
-		
-		"player":
-			element = player_scene.instantiate()
-			player_start_position = position
-			print("设置玩家起始位置: %s" % position)
-		
-		"goal":
-			element = goal_scene.instantiate()
-		
-		_:
-			print("未知元素类型: %s" % element_type)
-			return null
-	
-	if element:
-		element.position = position
-		add_child(element)
-		elements.append(element)
-		
-		# 记录到关卡数据
-		var key = "%d,%d" % [grid_pos.x, grid_pos.y]
-		level_data[key] = {
-			"type": element_type,
-			"name": element_name,
-			"position": {"x": position.x, "y": position.y},
-			"properties": {"color": current_color}
-		}
-		
-		# 如果是玩家，保存起始位置
-		if element_type == "player":
-			level_data["player_start"] = {"x": position.x, "y": position.y}
-		
-		return element
-	
-	return null
-
-func select_element_at(grid_pos: Vector2):
-	"""选择网格位置的元素"""
-	if not is_valid_grid_position(grid_pos):
-		return
-	
-	var element = grid[grid_pos.x][grid_pos.y]
-	if element:
-		selected_element = element
-		print("选中元素: %s 在 %s" % [element.name, grid_pos])
-		
-		# 如果是可拖拽的，开始拖拽
-		if element_has_drag_property(element):
-			current_dragging_element = element
-			drag_start_grid_pos = grid_pos
-			drag_offset = mouse_offset_from_center(element)
-			is_dragging = true
-			print("开始拖拽元素")
-		
-		# 显示元素属性
-		show_element_properties(element)
-	else:
-		selected_element = null
-		print("没有选中元素")
-
-func end_drag():
-	"""结束拖拽"""
-	if not current_dragging_element or not is_dragging:
-		return
-	
-	# 获取新的网格位置
-	var new_grid_pos = world_to_grid(current_dragging_element.position)
-	
-	if is_valid_grid_position(new_grid_pos):
-		# 检查新位置是否为空
-		if grid[new_grid_pos.x][new_grid_pos.y] == null or grid[new_grid_pos.x][new_grid_pos.y] == current_dragging_element:
-			# 从旧位置移除
-			if is_valid_grid_position(drag_start_grid_pos) and grid[drag_start_grid_pos.x][drag_start_grid_pos.y] == current_dragging_element:
-				grid[drag_start_grid_pos.x][drag_start_grid_pos.y] = null
+	# 处理区域拖拽
+	elif is_area_dragging:
+		var grid_pos = world_to_grid(mouse_pos)
+		if is_valid_grid_position(grid_pos):
+			area_drag_end = grid_pos
+			# 计算区域矩形
+			var start_x = min(area_drag_start.x, area_drag_end.x)
+			var end_x = max(area_drag_start.x, area_drag_end.x)
+			var start_y = min(area_drag_start.y, area_drag_end.y)
+			var end_y = max(area_drag_start.y, area_drag_end.y)
 			
-			# 添加到新位置
-			grid[new_grid_pos.x][new_grid_pos.y] = current_dragging_element
-			
-			# 对齐到网格
-			if Input.is_key_pressed(KEY_SHIFT):
-				snap_to_grid(current_dragging_element)
-			
-			# 更新关卡数据
-			var old_key = "%d,%d" % [drag_start_grid_pos.x, drag_start_grid_pos.y]
-			var new_key = "%d,%d" % [new_grid_pos.x, new_grid_pos.y]
-			
-			if level_data.has(old_key):
-				var data = level_data[old_key]
-				level_data.erase(old_key)
-				data.position = {"x": current_dragging_element.position.x, "y": current_dragging_element.position.y}
-				level_data[new_key] = data
-			
-			print("元素移动到 %s" % new_grid_pos)
-		else:
-			# 新位置被占用，返回原位置
-			current_dragging_element.position = drag_start_grid_pos * grid_size
-			print("新位置已被占用，返回原位置")
-	else:
-		# 位置无效，返回原位置
-		current_dragging_element.position = drag_start_grid_pos * grid_size
-		print("位置无效，返回原位置")
-
-func delete_element_at(grid_pos: Vector2):
-	"""删除网格位置的元素"""
-	if not is_valid_grid_position(grid_pos):
-		return
-	
-	var element = grid[grid_pos.x][grid_pos.y]
-	if element:
-		# 从场景中移除
-		if is_instance_valid(element):
-			element.queue_free()
-		
-		# 从数组中移除
-		var index = elements.find(element)
-		if index != -1:
-			elements.remove_at(index)
-		
-		# 从网格中移除
-		grid[grid_pos.x][grid_pos.y] = null
-		
-		# 从关卡数据中移除
-		var key = "%d,%d" % [grid_pos.x, grid_pos.y]
-		if level_data.has(key):
-			level_data.erase(key)
-		
-		# 如果删除的是玩家起始位置
-		if element.name.contains("Player") or element is CharacterBody2D:
-			player_start_position = Vector2(64, 384)
-			if level_data.has("player_start"):
-				level_data.erase("player_start")
-		
-		print("删除元素在 %s" % grid_pos)
-		
-		# 如果删除的是选中的元素，清空选择
-		if selected_element == element:
-			selected_element = null
-
-func clear_level():
-	"""清空关卡"""
-	print("清空关卡...")
-	
-	# 删除所有元素
-	for element in elements:
-		if is_instance_valid(element):
-			element.queue_free()
-	
-	elements.clear()
-	level_data.clear()
-	
-	# 清空网格
-	init_grid()
-	
-	# 重置玩家位置
-	player_start_position = Vector2(64, 384)
-	
-	print("关卡已清空")
-
-func world_to_grid(world_pos: Vector2) -> Vector2:
-	"""世界坐标转网格坐标"""
-	return Vector2(
-		floor(world_pos.x / grid_size),
-		floor(world_pos.y / grid_size)
-	)
-
-func grid_to_world(grid_pos: Vector2) -> Vector2:
-	"""网格坐标转世界坐标"""
-	return Vector2(
-		grid_pos.x * grid_size + grid_size / 2,
-		grid_pos.y * grid_size + grid_size / 2
-	)
-
-func is_valid_grid_position(grid_pos: Vector2) -> bool:
-	"""检查网格位置是否有效"""
-	return (
-		grid_pos.x >= 0 and 
-		grid_pos.x < level_width and 
-		grid_pos.y >= 0 and 
-		grid_pos.y < level_height
-	)
-
-func element_has_drag_property(element: Node2D) -> bool:
-	"""检查元素是否可拖拽"""
-	# 大部分元素都可拖拽
-	return true
-
-func mouse_offset_from_center(element: Node2D) -> Vector2:
-	"""计算鼠标位置相对于元素中心的偏移"""
-	var mouse_pos = get_global_mouse_position()
-	return mouse_pos - element.position
-
-func snap_to_grid(element: Node2D):
-	"""对齐到网格"""
-	var grid_pos = world_to_grid(element.position)
-	element.position = grid_pos * grid_size
-
-func show_element_properties(element: Node2D):
-	"""显示元素属性"""
-	if not element:
-		return
-	
-	var properties = {}
-	
-	if element is RectElement:
-		properties["width"] = element.grid_width
-		properties["height"] = element.grid_height
-		if element.has_property("text"):
-			properties["text"] = element.text
-		if element.has_property("has_collision"):
-			properties["has_collision"] = element.has_collision
-	
-	elif element is Mechanism:
-		if element.has_property("mechanism_type"):
-			properties["type"] = element.mechanism_type
-		if element.has_property("mechanism_color"):
-			properties["color"] = element.mechanism_color
-		if element.has_property("text"):
-			properties["text"] = element.text
-		if element.has_property("is_active"):
-			properties["is_active"] = element.is_active
-	
-	elif element is Switch:
-		if element.has_property("door_color"):
-			properties["door_color"] = element.door_color
-	
-	elif element is Door:
-		if element.has_property("door_color"):
-			properties["door_color"] = element.door_color
-		if element.has_property("current_state"):
-			properties["state"] = element.current_state
-	
-	elif element is FireTrap:
-		if element.has_property("damage"):
-			properties["damage"] = element.damage
-	
-	elif element is Goal:
-		if element.has_property("level_to_load"):
-			properties["level_to_load"] = element.level_to_load
-	
-	print("元素属性: ", properties)
+			area_rect = Rect2(
+				start_x * grid_size,
+				start_y * grid_size,
+				(end_x - start_x + 1) * grid_size,
+				(end_y - start_y + 1) * grid_size
+			)
+			queue_redraw()
 
 func save_level(path: String):
 	"""保存关卡"""
@@ -555,38 +454,236 @@ func save_level(path: String):
 		print("保存关卡失败")
 		return false
 
-func load_level(path: String):
+func load_level(path: String) -> bool:
 	"""加载关卡"""
 	print("加载关卡: %s" % path)
 	
+	# 检查文件是否存在
+	if not FileAccess.file_exists(path):
+		print("错误: 关卡文件不存在: %s" % path)
+		return false
+	
+	# 打开文件
 	var file = FileAccess.open(path, FileAccess.READ)
 	if file:
 		var json_text = file.get_as_text()
-		var json_data = JSON.parse_string(json_text)
-		if json_data:
-			# 清空现有关卡
-			clear_level()
-			
-			# 设置关卡参数
-			level_width = json_data.get("level_width", 20)
-			level_height = json_data.get("level_height", 15)
-			grid_size = json_data.get("grid_size", 32)
-			
-			var player_start = json_data.get("player_start", {"x": 64, "y": 384})
-			player_start_position = Vector2(player_start.x, player_start.y)
-			
-			# 重新初始化网格
-			init_grid()
-			
-			# 加载元素
-			for element_data in json_data.get("elements", []):
-				create_element_from_data(element_data)
-			
-			print("关卡加载完成，共 %d 个元素" % elements.size())
-			return true
+		var json = JSON.new()
+		var parse_result = json.parse(json_text)
+		
+		if parse_result == OK:
+			var json_data = json.get_data()
+			if json_data:
+				# 清空现有关卡
+				clear_level()
+				
+				# 设置关卡参数
+				level_width = json_data.get("level_width", 20)
+				level_height = json_data.get("level_height", 15)
+				grid_size = json_data.get("grid_size", 32)
+				
+				var player_start = json_data.get("player_start", {"x": 64, "y": 384})
+				player_start_position = Vector2(player_start.x, player_start.y)
+				
+				# 重新初始化网格
+				init_grid()
+				
+				# 加载元素
+				var element_count = 0
+				for element_data in json_data.get("elements", []):
+					var element = create_element_from_data(element_data)
+					if element:
+						element_count += 1
+				
+				print("关卡加载完成，共 %d 个元素" % element_count)
+				
+				# 刷新UI
+				update_ui_info()
+				queue_redraw()
+				
+				return true
+			else:
+				print("错误: JSON数据为空")
+		else:
+			print("错误: JSON解析失败: %s" % json.get_error_message())
+	else:
+		print("错误: 无法打开关卡文件")
 	
 	print("加载关卡失败")
 	return false
+
+func clear_level():
+	"""清空关卡"""
+	print("清空关卡...")
+	
+	# 删除所有元素
+	for element in elements:
+		if is_instance_valid(element):
+			element.queue_free()
+	
+	# 清空元素列表
+	elements.clear()
+	
+	# 清空网格
+	init_grid()
+	
+	# 重置玩家起始位置
+	player_start_position = Vector2(64, 384)
+	
+	# 清空level_data字典
+	level_data.clear()
+	
+	# 刷新显示
+	queue_redraw()
+	
+	print("关卡已清空")
+
+func fill_area(start: Vector2, end: Vector2):
+	"""填充区域"""
+	if not is_valid_grid_position(start) or not is_valid_grid_position(end):
+		return
+	
+	# 计算区域边界
+	var start_x = int(min(start.x, end.x))
+	var end_x = int(max(start.x, end.x))
+	var start_y = int(min(start.y, end.y))
+	var end_y = int(max(start.y, end.y))
+	
+	var filled_count = 0
+	
+	# 遍历区域内的所有网格
+	for x in range(start_x, end_x + 1):
+		for y in range(start_y, end_y + 1):
+			var grid_pos = Vector2(x, y)
+			
+			# 检查位置是否有效且未被占用
+			if is_valid_grid_position(grid_pos) and grid[x][y] == null:
+				# 创建元素
+				var element = create_element(current_element_type, grid_pos)
+				if element:
+					grid[x][y] = element
+					filled_count += 1
+	
+	print("区域填充完成，共放置 %d 个元素" % filled_count)
+
+func clear_area(start: Vector2, end: Vector2):
+	"""清除区域内的元素"""
+	if not is_valid_grid_position(start) or not is_valid_grid_position(end):
+		return
+	
+	# 计算区域边界
+	var start_x = int(min(start.x, end.x))
+	var end_x = int(max(start.x, end.x))
+	var start_y = int(min(start.y, end.y))
+	var end_y = int(max(start.y, end.y))
+	
+	var cleared_count = 0
+	
+	# 遍历区域内的所有网格
+	for x in range(start_x, end_x + 1):
+		for y in range(start_y, end_y + 1):
+			var grid_pos = Vector2(x, y)
+			
+			# 检查位置是否有元素
+			if is_valid_grid_position(grid_pos) and grid[x][y] != null:
+				# 删除元素
+				if delete_element_at(grid_pos):
+					cleared_count += 1
+	
+	print("区域清除完成，共删除 %d 个元素" % cleared_count)
+
+func toggle_test_mode():
+	"""切换测试模式"""
+	test_mode_active = !test_mode_active
+	
+	if test_mode_active:
+		enter_test_mode()
+	else:
+		exit_test_mode()
+	
+	test_mode_label.visible = test_mode_active
+	test_mode_label.text = "测试模式: %s" % ("激活" if test_mode_active else "关闭")
+	update_ui_info()
+	print("测试模式: %s" % ("激活" if test_mode_active else "关闭"))
+
+func enter_test_mode():
+	"""进入测试模式"""
+	# 创建测试玩家
+	create_test_player()
+	
+	# 设置输入映射
+	InputMap.action_erase_events("editor_select_mode")
+	InputMap.action_erase_events("editor_place_mode")
+	InputMap.action_erase_events("editor_delete_mode")
+	
+	# 设置测试控制
+	InputMap.add_action("test_move_left")
+	var event = InputEventKey.new()
+	event.keycode = KEY_A
+	InputMap.action_add_event("test_move_left", event)
+	
+	InputMap.add_action("test_move_right")
+	event = InputEventKey.new()
+	event.keycode = KEY_D
+	InputMap.action_add_event("test_move_right", event)
+	
+	InputMap.add_action("test_jump")
+	event = InputEventKey.new()
+	event.keycode = KEY_W
+	InputMap.action_add_event("test_jump", event)
+	
+	InputMap.add_action("test_attack")
+	event = InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	InputMap.action_add_event("test_attack", event)
+	
+	InputMap.add_action("test_exit")
+	event = InputEventKey.new()
+	event.keycode = KEY_TAB
+	InputMap.action_add_event("test_exit", event)
+	
+	print("进入测试模式")
+
+func exit_test_mode():
+	"""退出测试模式"""
+	# 删除测试玩家
+	if test_player:
+		test_player.queue_free()
+		test_player = null
+	
+	if test_camera:
+		test_camera.queue_free()
+		test_camera = null
+	
+	# 恢复编辑器输入映射
+	setup_input_map()
+	
+	print("退出测试模式")
+
+func create_test_player():
+	"""创建测试玩家"""
+	# 如果已有玩家，使用现有玩家
+	var existing_players = get_tree().get_nodes_in_group("player")
+	if existing_players.size() > 0:
+		test_player = existing_players[0]
+		print("使用现有玩家进行测试")
+		return
+	
+	# 创建新的测试玩家
+	if player_scene:
+		test_player = player_scene.instantiate() as CharacterBody2D
+		if test_player:
+			test_player.position = player_start_position
+			add_child(test_player)
+			
+			# 创建测试相机
+			test_camera = Camera2D.new()
+			test_camera.name = "TestCamera"
+			test_camera.make_current()
+			test_player.add_child(test_camera)
+			
+			print("创建测试玩家在位置: %s" % player_start_position)
+	else:
+		print("错误: 无法加载玩家场景")
 
 func get_element_data(element: Node2D) -> Dictionary:
 	"""获取元素数据"""
@@ -595,33 +692,15 @@ func get_element_data(element: Node2D) -> Dictionary:
 		"position": {"x": element.position.x, "y": element.position.y}
 	}
 	
-	if element is RectElement:
-		data["type"] = "rect"
-		if element.has_property("element_type"):
-			data["element_type"] = element.element_type
-		if element.has_property("grid_width"):
-			data["width"] = element.grid_width
-		if element.has_property("grid_height"):
-			data["height"] = element.grid_height
-		if element.has_property("text"):
-			data["text"] = element.text
-	
-	elif element is Mechanism:
-		data["type"] = "mechanism"
-		if element.has_property("mechanism_type"):
-			data["mechanism_type"] = element.mechanism_type
-		if element.has_property("text"):
-			data["text"] = element.text
-		if element.has_property("mechanism_color"):
-			data["color"] = element.mechanism_color
-		if element.has_property("is_active"):
-			data["is_active"] = element.is_active
-	
+	if element is Wall:
+		data["type"] = "wall"
+	elif element is Ground:
+		data["type"] = "ground"
 	elif element is Switch:
 		data["type"] = "switch"
 		if element.has_property("door_color"):
 			data["door_color"] = element.door_color
-	
+
 	elif element is Door:
 		data["type"] = "door"
 		if element.has_property("door_color"):
@@ -639,102 +718,116 @@ func get_element_data(element: Node2D) -> Dictionary:
 		if element.has_property("level_to_load"):
 			data["level_to_load"] = element.level_to_load
 	
-	elif element is Node2D and "Teleporter" in element.name:
-		if "In" in element.name:
+	elif element is Mechanism:
+		data["type"] = "mechanism"
+		if element.has_property("mechanism_type"):
+			data["mechanism_type"] = element.mechanism_type
+		if element.has_property("text"):
+			data["text"] = element.text
+		if element.has_property("mechanism_color"):
+			data["color"] = element.mechanism_color
+		if element.has_property("is_active"):
+			data["is_active"] = element.is_active
+	
+	# 尝试从元素名称推断类型
+	var name_lower = element.name.to_lower()
+	if "wall" in name_lower:
+		data["type"] = "wall"
+	elif "ground" in name_lower:
+		data["type"] = "ground"
+	elif "bow" in name_lower:
+		data["type"] = "bow"
+	elif "dirt" in name_lower:
+		data["type"] = "dirt"
+	elif "player" in name_lower:
+		data["type"] = "player"
+	elif "teleporter" in name_lower:
+		if "in" in name_lower:
 			data["type"] = "teleporter_in"
 		else:
 			data["type"] = "teleporter_out"
-	
-	elif element is Node2D and "Player" in element.name:
-		data["type"] = "player"
-	
-	else:
-		# 尝试从元素名称推断类型
-		var name_lower = element.name.to_lower()
-		if "wall" in name_lower:
-			data["type"] = "wall"
-		elif "ground" in name_lower:
-			data["type"] = "ground"
-		elif "bow" in name_lower:
-			data["type"] = "bow"
-		elif "dirt" in name_lower:
-			data["type"] = "dirt"
+		if element.has_method("get_color"):
+			data["color"] = element.get_color()
 	
 	return data
 
-func create_element_from_data(data: Dictionary):
+func create_element_from_data(data: Dictionary) -> Node2D:
 	"""从数据创建元素"""
 	var position = Vector2(data["position"]["x"], data["position"]["y"])
 	var element = null
 	var element_type = data.get("type", "unknown")
 	
 	match element_type:
-		"wall", "rect":
-			element = wall_scene.instantiate() as RectElement
-			if element:
-				element.grid_width = data.get("width", 1)
-				element.grid_height = data.get("height", 1)
-				element.position = position
-				if "element_type" in data:
-					element.element_type = data["element_type"]
 		
-		"ground":
-			element = ground_scene.instantiate() as RectElement
-			if element:
-				element.grid_width = data.get("width", 1)
-				element.grid_height = data.get("height", 1)
-				element.position = position
-		
+
 		"fire":
-			element = fire_scene.instantiate() as FireTrap
-			if element and "damage" in data:
-				element.damage = data["damage"]
+			if fire_scene:
+				element = fire_scene.instantiate() as Node2D
+				if element and element.has_property("damage") and "damage" in data:
+					element.damage = data["damage"]
 		
 		"goal":
-			element = goal_scene.instantiate() as Goal
-			if element and "level_to_load" in data:
-				element.level_to_load = data["level_to_load"]
+			if goal_scene:
+				element = goal_scene.instantiate() as Node2D
+				if element and element.has_property("level_to_load") and "level_to_load" in data:
+					element.level_to_load = data["level_to_load"]
 		
 		"switch":
-			element = switch_scene.instantiate() as Switch
-			if element and "door_color" in data:
-				element.door_color = data["door_color"]
+			if switch_scene:
+				element = switch_scene.instantiate() as Node2D
+				if element and element.has_property("door_color") and "door_color" in data:
+					element.door_color = data["door_color"]
 		
 		"door":
-			element = door_scene.instantiate() as Door
-			if element and "door_color" in data:
-				element.door_color = data["door_color"]
-				if "state" in data:
-					element.current_state = data["state"]
+			if door_scene:
+				element = door_scene.instantiate() as Node2D
+				if element and element.has_property("door_color") and "door_color" in data:
+					element.door_color = data["door_color"]
+					if element.has_property("current_state") and "state" in data:
+						element.current_state = data["state"]
 		
 		"teleporter_in":
-			element = teleporter_in_scene.instantiate()
-			if element and element.has_method("set_color") and "color" in data:
-				element.set_color(data["color"])
+			if teleporter_in_scene:
+				element = teleporter_in_scene.instantiate() as Node2D
+				if element and element.has_method("set_color") and "color" in data:
+					element.set_color(data["color"])
 		
 		"teleporter_out":
-			element = teleporter_out_scene.instantiate()
-			if element and element.has_method("set_color") and "color" in data:
-				element.set_color(data["color"])
+			if teleporter_out_scene:
+				element = teleporter_out_scene.instantiate() as Node2D
+				if element and element.has_method("set_color") and "color" in data:
+					element.set_color(data["color"])
 		
 		"player":
-			element = player_scene.instantiate()
-			player_start_position = position
+			if player_scene:
+				element = player_scene.instantiate() as Node2D
+				player_start_position = position
+		
+		"bow":
+			if bow_scene:
+				element = bow_scene.instantiate() as Node2D
+		
+		"dirt":
+			if dirt_scene:
+				element = dirt_scene.instantiate() as Node2D
 		
 		_:
 			print("未知元素类型: %s" % element_type)
 	
 	if element:
+		# 设置位置
+		element.position = position
+		
 		# 添加到场景
 		add_child(element)
 		elements.append(element)
 		
-		# 添加到网格
-		var grid_pos = world_to_grid(position)
+		# 计算网格位置
+		var grid_pos = world_to_grid(element.position)
 		if is_valid_grid_position(grid_pos):
 			grid[grid_pos.x][grid_pos.y] = element
 		
-		# 设置属性
+		# 设置其他属性
 		if "color" in data and element.has_method("set_color"):
 			element.call("set_color", data["color"])
 		elif "color" in data and element.has_property("mechanism_color"):
@@ -747,12 +840,355 @@ func create_element_from_data(data: Dictionary):
 	
 	return null
 
-func _on_gui_focus_changed(control: Control):
-	"""GUI焦点变化时处理"""
-	if control and control.get_parent() and control.get_parent().name == "PropertyPanel":
-		# 如果焦点在属性面板，暂停拖拽
+func world_to_grid(pos: Vector2) -> Vector2:
+	"""将世界坐标转换为网格坐标"""
+	# 确保坐标是相对于编辑器节点的局部坐标
+	var local_pos = to_local(pos)
+	return Vector2(floor(local_pos.x / grid_size), floor(local_pos.y / grid_size))
+
+func grid_to_world(pos: Vector2) -> Vector2:
+	"""将网格坐标转换为世界坐标"""
+	return Vector2(pos.x * grid_size + grid_size / 2, pos.y * grid_size + grid_size / 2)
+
+func is_valid_grid_position(pos: Vector2) -> bool:
+	"""检查网格位置是否有效"""
+	return pos.x >= 0 and pos.x < level_width and pos.y >= 0 and pos.y < level_height
+
+func place_element_at(grid_pos: Vector2) -> void:
+	"""在指定网格位置放置元素"""
+	print("尝试在网格位置 %s 放置元素" % grid_pos)
+	
+	if not is_valid_grid_position(grid_pos):
+		print("错误: 无效的网格位置: ", grid_pos)
+		return
+	
+	# 检查位置是否已被占用
+	if grid[grid_pos.x][grid_pos.y] != null:
+		var element = grid[grid_pos.x][grid_pos.y]
+		print("位置已被占用，元素: %s" % element.name)
+		return
+	
+	# 特殊处理：玩家只能有一个
+	if current_element_type == "player":
+		# 删除现有的玩家
+		for element in elements:
+			if element.name == "Player":
+				element.queue_free()
+				elements.erase(element)
+				break
+	
+	# 创建元素
+	var element = create_element(current_element_type, grid_pos)
+	if element:
+		# 添加到网格
+		grid[grid_pos.x][grid_pos.y] = element
+		print("在 %s 放置了 %s" % [grid_pos, current_element_type])
+		
+		# 更新显示
+		queue_redraw()
+	else:
+		print("创建元素失败，类型: %s" % current_element_type)
+func create_element(element_type: String, grid_pos: Vector2) -> Node2D:
+	"""创建新元素"""
+	var element = null
+	# 确保位置是格子中心
+	var world_pos = Vector2(
+		grid_pos.x * grid_size + grid_size / 2,
+		grid_pos.y * grid_size + grid_size / 2
+	)
+	
+	print("创建元素: 类型=%s, 网格位置=%s, 世界位置=%s" % [element_type, grid_pos, world_pos])
+	
+	match element_type:
+		
+		"wall":
+			if wall_scene:
+				element = wall_scene.instantiate()
+				if element:
+					element.name = "Wall_%d_%d" % [grid_pos.x, grid_pos.y]
+		"ground":
+			if ground_scene:
+				element = ground_scene.instantiate()
+				if element:
+					element.name = "Ground%d_%d" % [grid_pos.x, grid_pos.y]
+		
+	
+		
+		
+		"switch":
+			if switch_scene:
+				element = switch_scene.instantiate()
+				if element:
+					element.name = "Switch_%d_%d" % [grid_pos.x, grid_pos.y]
+		
+		"door":
+			if door_scene:
+				element = door_scene.instantiate()
+				if element:
+					element.name = "Door_%d_%d" % [grid_pos.x, grid_pos.y]
+		
+		"fire":
+			if fire_scene:
+				element = fire_scene.instantiate()
+				if element:
+					element.name = "FireTrap_%d_%d" % [grid_pos.x, grid_pos.y]
+		
+		"player":
+			if player_scene:
+				element = player_scene.instantiate()
+				if element:
+					element.name = "Player"
+					player_start_position = world_pos
+					print("设置玩家起始位置: %s" % world_pos)
+		
+		"goal":
+			if goal_scene:
+				element = goal_scene.instantiate()
+				if element:
+					element.name = "Goal_%d_%d" % [grid_pos.x, grid_pos.y]
+		
+		"teleporter_in":
+			if teleporter_in_scene:
+				element = teleporter_in_scene.instantiate()
+				if element:
+					element.name = "TeleporterIn_%d_%d" % [grid_pos.x, grid_pos.y]
+					if element.has_method("set_color"):
+						var color_index = colors.find(current_color)
+						if color_index >= 0:
+							element.set_color(color_index)
+		
+		"teleporter_out":
+			if teleporter_out_scene:
+				element = teleporter_out_scene.instantiate()
+				if element:
+					element.name = "TeleporterOut_%d_%d" % [grid_pos.x, grid_pos.y]
+					if element.has_method("set_color"):
+						var color_index = colors.find(current_color)
+						if color_index >= 0:
+							element.set_color(color_index)
+		
+		"bow":
+			if bow_scene:
+				element = bow_scene.instantiate()
+				if element:
+					element.name = "Bow_%d_%d" % [grid_pos.x, grid_pos.y]
+		
+		"dirt":
+			if dirt_scene:
+				element = dirt_scene.instantiate()
+				if element:
+					element.name = "Dirt_%d_%d" % [grid_pos.x, grid_pos.y]
+			else:
+				print("错误: 泥土场景未加载")
+		
+		_:  # 默认分支
+			print("未知元素类型: %s" % element_type)
+			return null  # 明确返回null
+	
+	if element:
+		# 设置位置
+		element.position = world_pos
+		
+		# 添加到场景
+		add_child(element)
+		elements.append(element)
+		
+		# 设置颜色
+		if element.has_method("set_color"):
+			var color_index = colors.find(current_color)
+			if color_index >= 0:
+				element.set_color(color_index)
+		
+		print("元素创建成功: %s" % element.name)
+		return element
+	
+	print("元素实例化失败")
+	return null
+func select_element_at(grid_pos: Vector2) -> void:
+	"""选择指定网格位置的元素"""
+	if not is_valid_grid_position(grid_pos):
+		return
+	
+	var element = grid[grid_pos.x][grid_pos.y]
+	if element:
+		selected_element = element
+		print("选择了元素: %s 在位置: %s" % [element.name, grid_pos])
+		
+		# 更新显示
+		queue_redraw()
+	else:
+		selected_element = null
+		print("没有元素在位置: %s" % grid_pos)
+
+func delete_element_at(grid_pos: Vector2) -> bool:
+	"""删除指定网格位置的元素"""
+	if not is_valid_grid_position(grid_pos):
+		return false
+	
+	var element = grid[grid_pos.x][grid_pos.y]
+	if element:
+		# 从场景中移除
+		if is_instance_valid(element):
+			element.queue_free()
+		
+		# 从元素列表中移除
+		var index = elements.find(element)
+		if index != -1:
+			elements.remove_at(index)
+		
+		# 从网格中移除
+		grid[grid_pos.x][grid_pos.y] = null
+		
+		print("删除了元素: %s 在位置: %s" % [element.name, grid_pos])
+		
+		# 如果删除的是选中元素，清空选择
+		if selected_element == element:
+			selected_element = null
+		
+		# 更新显示
+		queue_redraw()
+		return true
+	else:
+		print("没有元素在位置: %s" % grid_pos)
+		return false
+
+func end_drag() -> void:
+	"""结束拖拽元素"""
+	if current_dragging_element:
+		print("结束拖拽元素: %s" % current_dragging_element.name)
+		
+		# 对齐到网格
+		var new_grid_pos = world_to_grid(current_dragging_element.position)
+		
+		# 检查新位置是否有效
+		if is_valid_grid_position(new_grid_pos):
+			# 检查新位置是否被占用
+			if grid[new_grid_pos.x][new_grid_pos.y] != null and grid[new_grid_pos.x][new_grid_pos.y] != current_dragging_element:
+				print("目标位置已被占用，元素位置已恢复")
+				# 恢复原来的位置
+				var old_grid_pos = world_to_grid(current_dragging_element.position - Vector2(1, 1))
+				if is_valid_grid_position(old_grid_pos):
+					current_dragging_element.position = grid_to_world(old_grid_pos)
+			else:
+				# 更新网格
+				var old_grid_pos = world_to_grid(current_dragging_element.position - drag_offset)
+				if is_valid_grid_position(old_grid_pos) and grid[old_grid_pos.x][old_grid_pos.y] == current_dragging_element:
+					grid[old_grid_pos.x][old_grid_pos.y] = null
+				
+				if grid[new_grid_pos.x][new_grid_pos.y] != current_dragging_element:
+					grid[new_grid_pos.x][new_grid_pos.y] = current_dragging_element
+				
+				# 对齐到网格
+				current_dragging_element.position = grid_to_world(new_grid_pos)
+		
+		# 更新显示
+		queue_redraw()
+		
+		# 重置拖拽状态
 		is_dragging = false
 		current_dragging_element = null
+
+func get_element_bounds(element: Node2D) -> Rect2:
+	"""获取元素的边界矩形"""
+	var bounds = Rect2(element.position, Vector2(grid_size, grid_size))
+	
+	# 如果元素有宽度和高度属性，则使用这些属性
+	if element.has_property("grid_width") and element.has_property("grid_height"):
+		var width = element.grid_width
+		var height = element.grid_height
+		bounds.size = Vector2(width * grid_size, height * grid_size)
+	
+	# 如果元素是 Sprite2D，使用纹理大小
+	if element is Sprite2D and element.texture:
+		bounds.size = element.texture.get_size() * element.scale
+	
+	return bounds
+
+func handle_test_attack():
+	"""处理测试攻击"""
+	if not test_player or not test_mode_active:
+		return
+	
+	var current_time = Time.get_ticks_msec() / 1000.0
+	if current_time - last_attack_time < test_attack_cooldown:
+		return
+	
+	last_attack_time = current_time
+	
+	# 获取鼠标位置
+	var mouse_pos = get_global_mouse_position()
+	
+	# 计算攻击方向
+	var attack_direction = (mouse_pos - test_player.position).normalized()
+	
+	# 攻击范围
+	var attack_start = test_player.position
+	var attack_end = test_player.position + attack_direction * test_attack_range
+	
+	# 绘制攻击效果
+	draw_attack_effect(attack_start, attack_end)
+	
+	# 检测攻击范围内的机关
+	detect_and_trigger_mechanisms(attack_start, attack_end)
+	
+	print("玩家攻击: 从 %s 到 %s" % [attack_start, attack_end])
+
+func draw_attack_effect(start: Vector2, end: Vector2):
+	"""绘制攻击效果"""
+	# 创建攻击效果节点
+	var attack_line = Line2D.new()
+	attack_line.width = 3.0
+	attack_line.default_color = Color(1.0, 0.0, 0.0, 0.8)
+	attack_line.points = [start, end]
+	add_child(attack_line)
+	
+	# 创建定时器自动删除
+	var timer = Timer.new()
+	timer.wait_time = 0.1
+	timer.one_shot = true
+	timer.timeout.connect(func():
+		attack_line.queue_free()
+		timer.queue_free()
+	)
+	add_child(timer)
+	timer.start()
+
+func detect_and_trigger_mechanisms(start: Vector2, end: Vector2):
+	"""检测并触发机关"""
+	var space_state = get_world_2d().direct_space_state
+	var query = PhysicsRayQueryParameters2D.create(start, end)
+	query.collision_mask = 1
+	query.exclude = [test_player] if test_player else []
+	
+	var result = space_state.intersect_ray(query)
+	
+	if result:
+		var collider = result.collider
+		
+		# 检查是否是机关
+		if collider is Switch:
+			collider.interact()
+			print("攻击触发了开关")
+		elif collider is Door:
+			if collider.has_method("interact"):
+				collider.interact()
+				print("攻击触发了门")
+		elif collider is Mechanism:
+			if collider.has_method("activate"):
+				collider.activate()
+				print("攻击触发了机关")
+		elif collider is FireTrap:
+			if collider.has_method("activate"):
+				collider.activate()
+				print("攻击触发了火焰陷阱")
+		elif "Teleporter" in collider.name:
+			if collider.has_method("activate"):
+				collider.activate()
+				print("攻击触发了传送门")
+		elif "Bow" in collider.name:
+			if collider.has_method("shoot"):
+				collider.shoot()
+				print("攻击触发了弓箭")
 
 func _draw():
 	"""绘制网格和当前元素预览"""
@@ -771,13 +1207,16 @@ func _draw():
 		
 		if is_valid_grid_position(grid_pos):
 			var preview_color = Color(0, 1, 0, 0.3)
-			var preview_rect = Rect2(
-				grid_pos.x * grid_size + 2,
-				grid_pos.y * grid_size + 2,
-				grid_size - 4,
-				grid_size - 4
-			)
-			draw_rect(preview_rect, preview_color, true)
+			
+			if current_place_mode == PlaceMode.SINGLE:
+				# 单点模式：绘制单个格子预览
+				var preview_rect = Rect2(
+					grid_pos.x * grid_size + 2,
+					grid_pos.y * grid_size + 2,
+					grid_size - 4,
+					grid_size - 4
+				)
+				draw_rect(preview_rect, preview_color, true)
 			
 			# 显示当前元素名称
 			draw_string(
@@ -788,9 +1227,39 @@ func _draw():
 				-1,
 				12
 			)
+			
+			# 显示当前颜色
+			draw_string(
+				ThemeDB.fallback_font,
+				Vector2(grid_pos.x * grid_size + 5, grid_pos.y * grid_size + 30),
+				"颜色: " + current_color,
+				HORIZONTAL_ALIGNMENT_LEFT,
+				-1,
+				12
+			)
+	
+	# 绘制区域拖拽预览
+	if is_area_dragging and (current_edit_mode == EditMode.PLACE or current_edit_mode == EditMode.DELETE):
+		var area_color = Color.RED if current_edit_mode == EditMode.DELETE else Color.GREEN
+		area_color.a = 0.3
+		draw_rect(area_rect, area_color, true)
+		draw_rect(area_rect, area_color, false, 2.0)
+		
+		# 显示区域信息
+		var width = int(area_rect.size.x / grid_size)
+		var height = int(area_rect.size.y / grid_size)
+		var info_text = "区域: %d×%d" % [width, height]
+		draw_string(
+			ThemeDB.fallback_font,
+			Vector2(area_rect.position.x + 5, area_rect.position.y - 5),
+			info_text,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			12
+		)
 	
 	# 绘制玩家起始位置
-	if player_start_position:
+	if player_start_position and not test_mode_active:
 		draw_circle(player_start_position, 8, Color(0, 1, 0, 0.5))
 		draw_string(
 			ThemeDB.fallback_font,
@@ -802,36 +1271,40 @@ func _draw():
 		)
 	
 	# 绘制已选中元素边框
-	if selected_element and selected_element != current_dragging_element:
+	if selected_element and selected_element != current_dragging_element and not test_mode_active:
 		var bounds = get_element_bounds(selected_element)
 		draw_rect(bounds, Color(0, 1, 0, 0.5), false, 2.0)
 	
 	# 绘制拖拽中的元素边框
-	if current_dragging_element:
+	if current_dragging_element and not test_mode_active:
 		var bounds = get_element_bounds(current_dragging_element)
 		draw_rect(bounds, Color(1, 0, 0, 0.5), false, 2.0)
+	
+	# 在测试模式下绘制攻击范围
+	if test_mode_active and test_player:
+		var mouse_pos = get_global_mouse_position()
+		var attack_range_circle = test_attack_range
+		
+		# 绘制攻击范围圆
+		draw_arc(test_player.position, attack_range_circle, 0, TAU, 32, Color(1, 0, 0, 0.3), 2.0)
+		
+		# 绘制朝向鼠标的线
+		var attack_direction = (mouse_pos - test_player.position).normalized()
+		var attack_end = test_player.position + attack_direction * attack_range_circle
+		draw_line(test_player.position, attack_end, Color(1, 0, 0, 0.5), 2.0)
+		
+		# 绘制鼠标位置
+		draw_circle(mouse_pos, 5, Color(1, 1, 0, 0.8))
 
-func get_element_bounds(element: Node2D) -> Rect2:
-	"""获取元素边界框"""
-	if element is RectElement:
-		return Rect2(
-			element.position.x - (element.grid_width * grid_size) / 2,
-			element.position.y - (element.grid_height * grid_size) / 2,
-			element.grid_width * grid_size,
-			element.grid_height * grid_size
-		)
-	else:
-		# 默认大小
-		return Rect2(
-			element.position.x - grid_size / 2,
-			element.position.y - grid_size / 2,
-			grid_size,
-			grid_size
-		)
-
-# 设置输入映射
 func setup_input_map():
 	"""设置输入映射"""
+	# 清除现有输入映射
+	InputMap.action_erase_events("test_move_left")
+	InputMap.action_erase_events("test_move_right")
+	InputMap.action_erase_events("test_jump")
+	InputMap.action_erase_events("test_attack")
+	InputMap.action_erase_events("test_exit")
+	
 	# 编辑模式
 	InputMap.add_action("editor_select_mode")
 	var event = InputEventKey.new()
@@ -847,6 +1320,17 @@ func setup_input_map():
 	event = InputEventKey.new()
 	event.keycode = KEY_E
 	InputMap.action_add_event("editor_delete_mode", event)
+	
+	InputMap.add_action("editor_toggle_test")
+	event = InputEventKey.new()
+	event.keycode = KEY_TAB
+	InputMap.action_add_event("editor_toggle_test", event)
+	
+	InputMap.add_action("editor_toggle_area_mode")
+	event = InputEventKey.new()
+	event.keycode = KEY_A
+	event.ctrl_pressed = true
+	InputMap.action_add_event("editor_toggle_area_mode", event)
 	
 	# 元素选择
 	InputMap.add_action("element_wall")
@@ -884,21 +1368,74 @@ func setup_input_map():
 	event.keycode = KEY_7
 	InputMap.action_add_event("element_goal", event)
 	
+	InputMap.add_action("element_teleporter_in")
+	event = InputEventKey.new()
+	event.keycode = KEY_8
+	InputMap.action_add_event("element_teleporter_in", event)
+	
+	InputMap.add_action("element_teleporter_out")
+	event = InputEventKey.new()
+	event.keycode = KEY_9
+	InputMap.action_add_event("element_teleporter_out", event)
+	
+	InputMap.add_action("element_bow")
+	event = InputEventKey.new()
+	event.keycode = KEY_0
+	InputMap.action_add_event("element_bow", event)
+	
+	InputMap.add_action("element_dirt")
+	event = InputEventKey.new()
+	event.keycode = KEY_MINUS
+	InputMap.action_add_event("element_dirt", event)
+	
 	# 颜色选择
-	InputMap.add_action("color_red")
+	InputMap.add_action("color_0")
 	event = InputEventKey.new()
-	event.keycode = KEY_R
-	InputMap.action_add_event("color_red", event)
+	event.keycode = KEY_0
+	event.alt_pressed = true
+	InputMap.action_add_event("color_0", event)
 	
-	InputMap.add_action("color_green")
+	InputMap.add_action("color_1")
 	event = InputEventKey.new()
-	event.keycode = KEY_G
-	InputMap.action_add_event("color_green", event)
+	event.keycode = KEY_1
+	event.alt_pressed = true
+	InputMap.action_add_event("color_1", event)
 	
-	InputMap.add_action("color_blue")
+	InputMap.add_action("color_2")
 	event = InputEventKey.new()
-	event.keycode = KEY_B
-	InputMap.action_add_event("color_blue", event)
+	event.keycode = KEY_2
+	event.alt_pressed = true
+	InputMap.action_add_event("color_2", event)
+	
+	InputMap.add_action("color_3")
+	event = InputEventKey.new()
+	event.keycode = KEY_3
+	event.alt_pressed = true
+	InputMap.action_add_event("color_3", event)
+	
+	InputMap.add_action("color_4")
+	event = InputEventKey.new()
+	event.keycode = KEY_4
+	event.alt_pressed = true
+	InputMap.action_add_event("color_4", event)
+	
+	InputMap.add_action("color_5")
+	event = InputEventKey.new()
+	event.keycode = KEY_5
+	event.alt_pressed = true
+	InputMap.action_add_event("color_5", event)
+	
+	InputMap.add_action("color_6")
+	event = InputEventKey.new()
+	event.keycode = KEY_6
+	event.alt_pressed = true
+	InputMap.action_add_event("color_6", event)
+	
+	InputMap.add_action("color_7")
+	event = InputEventKey.new()
+	event.keycode = KEY_7
+	event.alt_pressed = true
+	InputMap.action_add_event("color_7", event)
 	
 	# 文件操作
 	InputMap.add_action("editor_save")
@@ -922,8 +1459,4 @@ func setup_input_map():
 func _notification(what):
 	"""处理节点通知"""
 	if what == NOTIFICATION_ENTER_TREE:
-		# 节点进入场景树时设置输入映射
 		setup_input_map()
-	elif what == NOTIFICATION_EXIT_TREE:
-		# 节点离开场景树时清理
-		pass

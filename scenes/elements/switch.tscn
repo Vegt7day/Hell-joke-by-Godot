@@ -10,13 +10,9 @@ is_toggle = true
 is_pressure_plate = false
 require_stay = false
 
-[node name="CollisionShape2D" parent="." index="0" unique_id=691877437]
-position = Vector2(12, 11.5)
-
-[node name="机关文字" parent="." index="1" unique_id=1899630671]
-offset_left = 0.0
-offset_top = -6.0
-offset_right = 56.0
-offset_bottom = 50.0
-theme_override_font_sizes/font_size = 28
+[node name="label" parent="." index="1" unique_id=1899630671]
+offset_left = -13.0
+offset_top = -21.0
+offset_right = 43.0
+offset_bottom = 35.0
 text = "开"

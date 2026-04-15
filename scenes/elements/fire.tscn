@@ -9,7 +9,9 @@ damage = 1
 damage_interval = 0.5
 is_permanent = true
 
-[node name="机关文字" parent="." index="1" unique_id=1899630671]
-offset_top = -6.0
-offset_bottom = 49.0
+[node name="label" parent="." index="1" unique_id=1899630671]
+offset_left = -14.0
+offset_top = -21.0
+offset_right = 42.0
+offset_bottom = 34.0
 text = "火"
