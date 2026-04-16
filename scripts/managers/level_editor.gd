@@ -5,7 +5,7 @@ class_name LevelEditor
 @export var level_width: int = 20
 @export var level_height: int = 15
 @export var grid_size: int = 32
-
+var ui_node: Node = null
 # 在类变量定义部分添加摄像机控制变量
 var camera: Camera2D
 var is_camera_dragging: bool = false
@@ -101,7 +101,7 @@ func _ready():
 	print("地图编辑器初始化")
 	load_scenes()
 	init_grid()
-	
+
 	# 创建UI元素
 	create_ui()
 	create_editor_ui() 
@@ -114,7 +114,10 @@ func _ready():
 	
 	# 创建默认的空白地图
 	create_default_map()
-	
+
+
+
+
 func setup_camera():
 	"""设置摄像机"""
 	# 尝试获取场景中的摄像机
@@ -202,7 +205,15 @@ func connect_ui_signals():
 		# 添加学生场景
 	if not student_scene:
 		student_scene = load("res://scenes/elements/student.tscn")
-
+	# 使用ui_instance进行初始同步
+	if ui_instance:
+		print("UI实例已创建")
+		
+		# 初始同步
+		ui_instance.set_current_element(current_element_type)
+		ui_instance.set_current_color(current_color_index)
+	else:
+		print("警告: UI实例未创建")
 
 func get_student_elements_in_level():
 	"""获取关卡中的所有学生元素"""
@@ -564,6 +575,14 @@ func update_ui_info():
 	#if ui_instance:
 		#ui_instance.update_status("地图大小: %d×%d" % [level_width, level_height])
 
+func update_status(message: String):
+	"""更新状态信息"""
+	print("状态: " + message)
+	
+	# 如果UI节点存在，尝试调用它的update_status函数
+	if ui_node and ui_node.has_method("update_status"):
+		ui_node.call("update_status", message)
+
 func handle_camera_input(event: InputEvent):
 	"""处理摄像机输入"""
 	if not camera:
@@ -583,23 +602,32 @@ func handle_camera_input(event: InputEvent):
 				is_camera_dragging = false
 				print("结束摄像机拖拽")
 		
-		# 鼠标滚轮缩放
+		# 鼠标滚轮缩放 - 只在按下Ctrl时生效
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-			# 放大
-			camera_zoom = clamp(camera_zoom + 0.1, 0.5, 3.0)
-			camera.zoom = Vector2(camera_zoom, camera_zoom)
-			print("摄像机放大: %.1f" % camera_zoom)
+			# 检查是否按下Ctrl键
+			if Input.is_key_pressed(KEY_CTRL):
+				# Ctrl + 滚轮上滚：放大
+				camera_zoom = clamp(camera_zoom + 0.1, 0.5, 3.0)
+				camera.zoom = Vector2(camera_zoom, camera_zoom)
+				print("摄像机放大: %.1f" % camera_zoom)
+			else:
+				# 不按Ctrl时，返回false让事件继续传递
+				return
 		
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-			# 缩小
-			camera_zoom = clamp(camera_zoom - 0.1, 0.5, 3.0)
-			camera.zoom = Vector2(camera_zoom, camera_zoom)
-			print("摄像机缩小: %.1f" % camera_zoom)
+			# 检查是否按下Ctrl键
+			if Input.is_key_pressed(KEY_CTRL):
+				# Ctrl + 滚轮下滚：缩小
+				camera_zoom = clamp(camera_zoom - 0.1, 0.5, 3.0)
+				camera.zoom = Vector2(camera_zoom, camera_zoom)
+				print("摄像机缩小: %.1f" % camera_zoom)
+			else:
+				# 不按Ctrl时，返回false让事件继续传递
+				return
 	
 	# 鼠标移动摄像机
 	elif event is InputEventMouseMotion and is_camera_dragging:
 		handle_camera_drag(event)
-
 func handle_camera_drag(event: InputEventMouseMotion):
 	"""处理摄像机拖拽"""
 	if not is_camera_dragging or not camera:
@@ -634,11 +662,12 @@ func _input(event):
 			handle_editor_mouse(event)
 		
 		# 鼠标滚轮切换元素类型（如果未用于摄像机缩放）
-		if event.pressed and not is_camera_dragging:
-			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-				handle_mouse_wheel_up(event)
-			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-				handle_mouse_wheel_down(event)
+		if event is InputEventMouseButton and event.pressed:
+			if not Input.is_key_pressed(KEY_CTRL):
+				if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+					handle_mouse_wheel_up(event)
+				elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+					handle_mouse_wheel_down(event)
 	# 切换元素类型
 	elif event.is_action_pressed("element_wall"):
 		select_element_type("wall")
@@ -692,7 +721,8 @@ func _input(event):
 		load_level("user://custom_level.json")
 	elif event.is_action_pressed("editor_clear"):
 		clear_level()
-# 修改现有的set_color函数
+
+
 func set_color(color_index: int):
 	"""设置当前颜色"""
 	if color_index >= 0 and color_index < color_names.size():
@@ -725,31 +755,68 @@ func select_element_type(type_name: String):
 		# 更新UI
 		if ui_instance:
 			ui_instance.set_current_element(type_name)
+			
+			
 func handle_mouse_wheel_up(event: InputEventMouseButton):
 	"""处理鼠标滚轮上滚（切换元素类型）"""
 	# 如果正在拖拽摄像机，不处理元素切换
 	if is_camera_dragging:
 		return
-	
-	# 向上滚轮：切换到上一个元素类型
-	current_element_index = (current_element_index - 1) % element_types.size()
-	current_element_type = element_types[current_element_index]
-	print("切换到元素: %s" % current_element_type)
-	update_ui_info()
-	queue_redraw()
+	cycle_element_type(1)
 
 func handle_mouse_wheel_down(event: InputEventMouseButton):
 	"""处理鼠标滚轮下滚（切换元素类型）"""
 	# 如果正在拖拽摄像机，不处理元素切换
 	if is_camera_dragging:
 		return
+	cycle_element_type(-1)
+
 	
-	current_element_index = (current_element_index + 1) % element_types.size()
-	current_element_type = element_types[current_element_index]
+func cycle_element_type(direction: int):
+	"""循环切换元素类型"""
+	var element_types = [
+		"wall", 
+		"ground", 
+		"switch", 
+		"door", 
+		"fire", 
+		"player", 
+		"student", 
+		"goal", 
+		"teleporter_in", 
+		"teleporter_out", 
+		"bow", 
+		"dirt"
+	]
+	
+	# 找到当前元素的索引
+	var current_index = element_types.find(current_element_type)
+	if current_index == -1:
+		# 如果当前元素不在列表中，从第一个开始
+		current_element_type = element_types[0]
+		current_index = 0
+	else:
+		# 计算新的索引
+		var new_index = current_index + direction
+		
+		# 循环处理
+		if new_index < 0:
+			new_index = element_types.size() - 1
+		elif new_index >= element_types.size():
+			new_index = 0
+		
+		current_element_type = element_types[new_index]
+	
 	print("切换到元素: %s" % current_element_type)
+	
+	# 更新 UI - 取消注释并确保调用
+	if ui_instance:
+		ui_instance.set_current_element(current_element_type)
 	update_ui_info()
 	queue_redraw()
 	
+	# 更新状态
+	update_status("当前元素: %s" % current_element_type)
 
 func save_level(path: String):
 	"""保存关卡"""

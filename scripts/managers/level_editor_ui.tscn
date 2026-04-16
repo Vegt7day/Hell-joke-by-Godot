@@ -87,10 +87,7 @@ theme_override_constants/separation = 5
 [node name="选择元素" type="OptionButton" parent="Control/PanelContainer/VBoxContainer/元素选择" unique_id=293346255]
 layout_mode = 2
 selected = 0
-item_count = 3
-popup/item_0/id = 0
-popup/item_1/id = 1
-popup/item_2/id = 2
+item_count = 0
 
 [node name="当前元素" type="Label" parent="Control/PanelContainer/VBoxContainer/元素选择" unique_id=643059746]
 layout_mode = 2

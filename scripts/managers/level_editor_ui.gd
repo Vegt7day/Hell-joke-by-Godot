@@ -34,7 +34,7 @@ signal reload_map_size_pressed
 
 var current_zoom: float = 1.0
 var is_test_mode: bool = false
-# 当前地图大小
+var skip_element_signal: bool = false
 var current_rows: int = 15
 var current_cols: int = 20
 
@@ -112,6 +112,17 @@ func _ready():
 	
 	# 初始化地图大小输入框
 	init_map_size_inputs()
+	# 调试元素选项
+	print("UI: element_option.item_count = ", element_option.item_count)
+	print("UI: element_option.items = ", element_option.get_item_count())
+	
+	# 测试元数据
+	for i in range(element_option.get_item_count()):
+		var text = element_option.get_item_text(i)
+		var metadata = element_option.get_item_metadata(i)
+		print("UI: 选项[%d]: 文本='%s', 元数据='%s'" % [i, text, metadata])
+
+	
 	
 	# 连接选项信号
 	if element_option:
@@ -249,6 +260,7 @@ func init_element_options():
 		{"id": "door", "text": "门"},
 		{"id": "fire", "text": "火焰陷阱"},
 		{"id": "player", "text": "玩家"},
+		{"id": "student", "text": "学生"},
 		{"id": "goal", "text": "终点"},
 		{"id": "teleporter_in", "text": "传送门入口"},
 		{"id": "teleporter_out", "text": "传送门出口"},
@@ -337,7 +349,12 @@ func _on_zoom_out_pressed():
 	update_zoom_label()
 	update_status("缩小视图")
 
+# 修改 _on_element_selected
 func _on_element_selected(index: int):
+	if skip_element_signal:
+		skip_element_signal = false
+		return
+	
 	var element_type = element_option.get_item_metadata(index)
 	element_selected.emit(element_type)
 	element_label.text = "当前: " + element_option.get_item_text(index)
@@ -379,15 +396,49 @@ func update_zoom_label():
 func update_color_preview(color: Color):
 	"""更新颜色预览"""
 	color_preview.color = color
-
+# 修改 set_current_element
 func set_current_element(element_type: String):
 	"""设置当前选择的元素"""
+	print("UI: 尝试设置当前元素类型: ", element_type)
+	
+	# 检查当前是否已经是这个元素
+	var current_index = element_option.get_selected()
+	if current_index >= 0:
+		var current_id = element_option.get_item_metadata(current_index)
+		if current_id == element_type:
+			print("UI: 当前已经是这个元素，跳过更新")
+			return
+	
+	# 先检查元素类型是否在UI的元素列表中
+	var found = false
 	for i in range(element_option.item_count):
-		if element_option.get_item_metadata(i) == element_type:
+		var item_id = element_option.get_item_metadata(i)
+		if item_id == element_type:
+			# 设置跳过信号标志，防止循环
+			skip_element_signal = true
 			element_option.select(i)
 			element_label.text = "当前: " + element_option.get_item_text(i)
+			print("UI: 成功设置元素为: ", element_option.get_item_text(i))
+			found = true
 			break
-
+	
+	# 如果没有找到，使用默认的第一个元素
+	if not found and element_option.item_count > 0:
+		print("UI: 警告: 元素类型'", element_type, "'不在UI元素列表中，使用默认元素")
+		element_option.select(0)
+		var default_id = element_option.get_item_metadata(0)
+		element_label.text = "当前: " + element_option.get_item_text(0)
+		print("UI: 使用默认元素: ", element_option.get_item_text(0))
+		
+		# 发送信号通知主编辑器切换到默认元素
+		element_selected.emit(default_id)
+	else:
+		# 更新状态显示
+		update_status("当前元素: " + element_type)
+	
+	# 刷新界面
+	element_option.queue_redraw()
+	
 func set_current_color(color_index: int):
 	"""设置当前选择的颜色"""
 	if color_index < color_option.item_count:
