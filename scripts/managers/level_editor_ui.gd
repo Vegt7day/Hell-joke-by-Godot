@@ -13,7 +13,7 @@ signal color_selected(color_index: int)
 # 新增地图大小相关信号
 signal level_size_changed(rows: int, cols: int)
 signal reload_map_size_pressed
-
+var mouse_over_ui: bool = false
 # UI引用 - 更新为中文节点名称
 @onready var save_button: Button = $Control/PanelContainer/VBoxContainer/文件操作/保存
 @onready var load_button: Button = $Control/PanelContainer/VBoxContainer/文件操作/加载
@@ -138,6 +138,9 @@ func _ready():
 	# 初始状态
 	update_status("编辑器就绪")
 	update_zoom_label()
+	
+
+
 
 func init_map_size_inputs():
 	"""初始化地图大小输入框"""

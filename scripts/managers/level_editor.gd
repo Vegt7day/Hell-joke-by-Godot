@@ -14,7 +14,7 @@ var camera_original_position: Vector2
 var camera_zoom: float = 1.0
 var test_switch_door_connections = {}  # 测试模式下的开关-门连接
 var test_teleporter_connections = {}  # 测试模式下的传送门连接
-
+var mouse_over_ui: bool = false
 
 # 场景引用
 @export var wall_scene: PackedScene
@@ -653,6 +653,13 @@ func _input(event):
 	
 	# 鼠标按钮事件
 	if event is InputEventMouseButton:
+		
+		
+		mouse_over_ui = is_mouse_over_ui()
+		if mouse_over_ui:
+			return
+		if event is InputEventMouseButton and mouse_over_ui:
+			return
 		if test_mode_active:
 			# 测试模式下的鼠标事件
 			if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
@@ -2164,12 +2171,50 @@ func _process(delta):
 			is_left_dragging,
 			is_right_dragging
 		])
+		
+func is_mouse_over_ui() -> bool:
+	"""检查鼠标是否在UI区域内"""
+	if not ui_instance:
+		return false
+	
+	# 获取鼠标位置
+	var mouse_pos = get_viewport().get_mouse_position()
+	
+	# 检查UI实例是否可见
+	if ui_instance.visible:
+		# 获取UI的全局矩形
+		var ui_rect = get_ui_global_rect()
+		if ui_rect and ui_rect.has_point(mouse_pos):
+			print("在ui区域")
+			return true
+	
+	return false
+
+func get_ui_global_rect() -> Rect2:
+	"""获取UI的全局矩形区域"""
+	if ui_instance and ui_instance is CanvasLayer:
+		# 获取CanvasLayer下的Control节点
+		var control = ui_instance.get_node("Control")
+		if control and control is Control:
+			# 获取控制节点的全局矩形
+			var rect = control.get_global_rect()
+			return rect
+	
+	return Rect2()
+
+
 func handle_editor_mouse(event: InputEventMouseButton):
 	"""处理编辑器模式下的鼠标事件"""
 	var mouse_pos = get_global_mouse_position()
 	var grid_pos = world_to_grid(mouse_pos)
 	
 	print("鼠标事件: 按钮=%d, 按下=%s" % [event.button_index, event.pressed])
+	
+		# 检查鼠标是否在UI区域内
+	if is_mouse_over_ui():
+		print("鼠标在UI上，忽略编辑器操作")
+		return
+	
 	
 	if event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
