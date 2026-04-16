@@ -829,13 +829,17 @@ func save_level(path: String):
 	"""保存关卡"""
 	print("保存关卡到: %s" % path)
 	
+	# 保存传送门配对状态
+	save_teleporter_pair_states()
+	
 	var save_data = {
 		"version": "1.0",
 		"level_width": level_width,
 		"level_height": level_height,
 		"grid_size": grid_size,
 		"player_start": {"x": player_start_position.x, "y": player_start_position.y},
-		"elements": []
+		"elements": [],
+		"teleporter_pairs": teleporter_save_data  # 添加传送门配对数据
 	}
 	
 	# 保存所有元素
@@ -1002,7 +1006,9 @@ func load_level(path: String) -> bool:
 				
 				var player_start = json_data.get("player_start", {"x": 64, "y": 384})
 				player_start_position = Vector2(player_start.x, player_start.y)
-				
+				if "teleporter_pairs" in json_data:
+					teleporter_save_data = json_data["teleporter_pairs"]
+					load_teleporter_pair_states()
 				# 重新初始化网格
 				init_grid()
 				
@@ -1057,7 +1063,10 @@ func clear_level():
 	selected_element = null
 	current_dragging_element = null
 	is_dragging = false
-	
+		# 清空传送门数据
+	teleporter_pairs_by_color.clear()
+	teleporter_save_data.clear()
+	teleporter_validation_cache.clear()
 	# 刷新显示
 	queue_redraw()
 	
@@ -1139,53 +1148,79 @@ func toggle_test_mode():
 	
 	if test_mode_active:
 		enter_test_mode()
+		setup_teleporter_pairs_by_color()
+		validate_teleporter_pairs()
 	else:
 		exit_test_mode()
-	
+		clear_all_teleporter_pairs()
 	test_mode_label.visible = test_mode_active
 	test_mode_label.text = "测试模式: %s" % ("激活" if test_mode_active else "关闭")
 	update_ui_info()
 	print("测试模式: %s" % ("激活" if test_mode_active else "关闭"))
 
-
 func setup_switch_door_connections():
-	"""在测试模式下自动连接同颜色的开关和门"""
+	"""在测试模式下自动连接同颜色的开关、门和传送门"""
 	test_switch_door_connections.clear()
 	
-	# 收集所有开关和门
+	# 收集所有开关、门和传送门
 	var switches = []
 	var doors = []
+	var teleporters = []
 	
 	for element in elements:
 		if is_instance_valid(element):
 			if element is Switch:
 				switches.append(element)
+				print("找到开关: %s" % element.name)
 			elif element is Door:
 				doors.append(element)
+				print("找到门: %s" % element.name)
+			elif element is Teleporter:
+				teleporters.append(element)
+				print("找到传送门: %s" % element.name)
 	
-	print("找到 %d 个开关和 %d 个门" % [switches.size(), doors.size()])
+	print("找到 %d 个开关, %d 个门, %d 个传送门" % [switches.size(), doors.size(), teleporters.size()])
 	
 	# 按颜色分组
 	var color_groups = {}
 	
+	# 处理开关颜色分组
 	for switch in switches:
 		var switch_color = get_element_color(switch)
 		if not switch_color in color_groups:
-			color_groups[switch_color] = {"switches": [], "doors": []}
+			color_groups[switch_color] = {"switches": [], "doors": [], "teleporters": []}
 		color_groups[switch_color].switches.append(switch)
+		print("开关 %s 颜色: %s" % [switch.name, switch_color])
 	
+	# 处理门颜色分组
 	for door in doors:
 		var door_color = get_element_color(door)
 		if not door_color in color_groups:
-			color_groups[door_color] = {"switches": [], "doors": []}
+			color_groups[door_color] = {"switches": [], "doors": [], "teleporters": []}
 		color_groups[door_color].doors.append(door)
+		print("门 %s 颜色: %s" % [door.name, door_color])
 	
-	# 为每个颜色组的开关和门创建连接
+	# 处理传送门颜色分组
+	for teleporter in teleporters:
+		var teleporter_color = get_element_color(teleporter)
+		if not teleporter_color in color_groups:
+			color_groups[teleporter_color] = {"switches": [], "doors": [], "teleporters": []}
+		color_groups[teleporter_color].teleporters.append(teleporter)
+		print("传送门 %s 颜色: %s" % [teleporter.name, teleporter_color])
+	
+	# 为每个颜色组创建连接
 	for color_name in color_groups.keys():
 		var group = color_groups[color_name]
+		print("颜色组 %s: %d 个开关, %d 个门, %d 个传送门" % [
+			color_name, 
+			group.switches.size(), 
+			group.doors.size(),
+			group.teleporters.size()
+		])
+		
+		# 1. 连接开关和门
 		if group.switches.size() > 0 and group.doors.size() > 0:
-			print("颜色组 %s: %d 个开关 -> %d 个门" % [color_name, group.switches.size(), group.doors.size()])
-			
+			print("连接开关和门:")
 			for switch in group.switches:
 				for door in group.doors:
 					# 建立双向连接
@@ -1201,8 +1236,31 @@ func setup_switch_door_connections():
 							test_switch_door_connections[switch] = []
 						test_switch_door_connections[switch].append(door)
 						
-						print("连接: %s[%s] -> %s[%s]" % [switch.name, get_element_color(switch), door.name, get_element_color(door)])
-
+						print("  连接: %s[%s] -> %s[%s]" % [
+							switch.name, 
+							get_element_color(switch), 
+							door.name, 
+							get_element_color(door)
+						])
+		
+		# 2. 连接开关和传送门
+		if group.switches.size() > 0 and group.teleporters.size() > 0:
+			print("连接开关和传送门:")
+			for switch in group.switches:
+				for teleporter in group.teleporters:
+					if is_instance_valid(switch) and is_instance_valid(teleporter):
+						if switch.has_method("link_teleporter"):
+							switch.link_teleporter(teleporter)
+							print("  连接开关 %s 到传送门 %s" % [switch.name, teleporter.name])
+						
+						# 记录连接
+						if not test_switch_door_connections.has(switch):
+							test_switch_door_connections[switch] = []
+						if not teleporter in test_switch_door_connections[switch]:
+							test_switch_door_connections[switch].append(teleporter)
+							
+							
+							
 func get_element_color(element: Node2D) -> String:
 	"""获取元素的颜色"""
 	# 优先尝试 color 属性
@@ -1707,7 +1765,7 @@ func apply_color_to_element(element: Node2D, element_type: String):
 	var color_value = get_color_value(current_color_index)
 	var color_name = color_names[current_color_index]  # 获取颜色名称
 	
-	print("为元素 %s 应用颜色: a%s (索引: %d)" % [element.name, current_color, current_color_index])
+	print("为元素 %s 应用颜色: %s (索引: %d)" % [element.name, current_color, current_color_index])
 	
 	# 根据不同元素类型和属性设置颜色
 	if element_type == "door":
@@ -1752,7 +1810,19 @@ func apply_color_to_element(element: Node2D, element_type: String):
 			element.update_label_color()
 			print("  开关: 调用update_label_color")
 			
-			
+		# 在 switch 分支后面添加传送门分支
+	elif element_type.begins_with("teleporter"):
+		# 处理传送门元素
+		if element.has_method("set_teleporter_color"):
+			# 调用传送门的颜色设置方法，传递颜色名称
+			element.set_teleporter_color(color_name)
+			print("  传送门: 调用set_teleporter_color: %s" % color_name)
+		elif "teleporter_color" in element:
+			# 设置teleporter_color属性
+			element.teleporter_color = color_name
+			print("  传送门: 设置teleporter_color属性: %s" % color_name)
+	
+	
 	elif element.has_method("set_color"):
 		# 如果元素有set_color方法，传递颜色索引
 		element.set_color(current_color_index)
@@ -2505,3 +2575,442 @@ func set_collision_layer_for_element(element: Node2D, layer: int, value: bool):
 			if grandchild is StaticBody2D or grandchild is Area2D or grandchild is CharacterBody2D:
 				grandchild.set_collision_layer_value(layer, value)
 				print("  ✓ 为孙节点 %s 设置碰撞层 %d" % [grandchild.get_class(), layer])
+
+
+# 在level_editor.py的类变量部分添加传送门相关变量
+var teleporter_pairs_by_color: Dictionary = {}  # 按颜色分组的传送门配对
+var teleporter_save_data: Dictionary = {}  # 传送门保存数据
+var teleporter_validation_cache: Dictionary = {}  # 验证缓存
+
+func setup_teleporter_pairs_by_color():
+	"""按颜色设置传送门配对（一个"传"配一个"送"）"""
+	print("开始按颜色配对传送门...")
+	
+	# 清空现有配对
+	teleporter_pairs_by_color.clear()
+	
+	# 收集所有传送门
+	var teleporters = []
+	for element in elements:
+		if is_instance_valid(element) and element is Teleporter:
+			teleporters.append(element)
+			print("找到传送门: %s, 颜色: %s, 状态: %s" % [
+				element.name, 
+				element.color, 
+				("传" if element.is_entrance else "送")
+			])
+	
+	if teleporters.size() == 0:
+		print("未找到传送门，跳过配对")
+		return
+	
+	# 按颜色分组
+	var teleporters_by_color = {}
+	for teleporter in teleporters:
+		var color = teleporter.color
+		if not color in teleporters_by_color:
+			teleporters_by_color[color] = {"entrances": [], "exits": []}
+		
+		if teleporter.is_entrance:
+			teleporters_by_color[color].entrances.append(teleporter)
+		else:
+			teleporters_by_color[color].exits.append(teleporter)
+	
+	# 为每个颜色组创建配对
+	for color in teleporters_by_color:
+		var entrances = teleporters_by_color[color].entrances
+		var exits = teleporters_by_color[color].exits
+		
+		print("颜色 %s: %d个入口, %d个出口" % [color, entrances.size(), exits.size()])
+		
+		# 记录配对信息
+		var pairs_for_color = []
+		teleporter_pairs_by_color[color] = pairs_for_color
+		
+		# 尝试配对（简单的1对1配对）
+		var pair_count = min(entrances.size(), exits.size())
+		for i in range(pair_count):
+			var entrance = entrances[i]
+			var exit = exits[i]
+			
+			if is_instance_valid(entrance) and is_instance_valid(exit):
+				# 建立双向配对
+				entrance.set_paired_target(exit)
+				exit.set_paired_target(entrance)
+				
+				# 记录配对
+				var pair_info = {
+					"entrance": entrance,
+					"exit": exit,
+					"entrance_name": entrance.name,
+					"exit_name": exit.name,
+					"color": color
+				}
+				pairs_for_color.append(pair_info)
+				
+				print("配对成功: %s(传) ↔ %s(送)" % [entrance.name, exit.name])
+		
+		# 处理未配对的传送门
+		var unpaired_entrances = []
+		var unpaired_exits = []
+		
+		if entrances.size() > pair_count:
+			for i in range(pair_count, entrances.size()):
+				unpaired_entrances.append(entrances[i])
+		
+		if exits.size() > pair_count:
+			for i in range(pair_count, exits.size()):
+				unpaired_exits.append(exits[i])
+		
+		# 警告未配对的传送门
+		for teleporter in unpaired_entrances:
+			teleporter.clear_paired_target()
+			print("警告: 入口传送门 %s 未配对" % teleporter.name)
+		
+		for teleporter in unpaired_exits:
+			teleporter.clear_paired_target()
+			print("警告: 出口传送门 %s 未配对" % teleporter.name)
+	
+	# 验证配对
+	validate_teleporter_pairs()
+	
+	print("传送门配对完成，共处理 %d 种颜色" % teleporter_pairs_by_color.size())
+
+func validate_teleporter_pairs():
+	"""验证所有传送门配对是否有效"""
+	print("开始验证传送门配对...")
+	
+	teleporter_validation_cache.clear()
+	
+	var valid_pairs = 0
+	var invalid_pairs = 0
+	var total_pairs = 0
+	
+	for color in teleporter_pairs_by_color:
+		var pairs = teleporter_pairs_by_color[color]
+		total_pairs += pairs.size()
+		
+		for pair_info in pairs:
+			var entrance = pair_info.entrance
+			var exit = pair_info.exit
+			
+			# 检查配对是否有效
+			var is_valid = true
+			var issues = []
+			
+			if not is_instance_valid(entrance):
+				is_valid = false
+				issues.append("入口传送门无效")
+			elif not entrance.is_entrance:
+				is_valid = false
+				issues.append("入口不是'传'状态")
+			
+			if not is_instance_valid(exit):
+				is_valid = false
+				issues.append("出口传送门无效")
+			elif exit.is_entrance:
+				is_valid = false
+				issues.append("出口不是'送'状态")
+			
+			if is_valid and entrance.color != exit.color:
+				is_valid = false
+				issues.append("颜色不匹配")
+			
+			if is_valid and entrance.paired_target != exit:
+				is_valid = false
+				issues.append("入口未正确连接出口")
+			
+			if is_valid and exit.paired_target != entrance:
+				is_valid = false
+				issues.append("出口未正确连接入口")
+			
+			# 记录验证结果
+			var validation_key = "%s_%s" % [entrance.name, exit.name]
+			teleporter_validation_cache[validation_key] = {
+				"is_valid": is_valid,
+				"issues": issues,
+				"pair": pair_info
+			}
+			
+			if is_valid:
+				valid_pairs += 1
+				print("✓ 配对有效: %s ↔ %s" % [entrance.name, exit.name])
+			else:
+				invalid_pairs += 1
+				print("✗ 配对无效: %s ↔ %s (%s)" % [
+					entrance.name, exit.name, ", ".join(issues)
+				])
+	
+	print("验证完成: %d/%d 配对有效" % [valid_pairs, total_pairs])
+	
+	# 返回验证摘要
+	return {
+		"total_pairs": total_pairs,
+		"valid_pairs": valid_pairs,
+		"invalid_pairs": invalid_pairs,
+		"validation_cache": teleporter_validation_cache
+	}
+
+func find_teleporter_pairs_for_color(color_index: int) -> Array:
+	"""查找指定颜色的传送门对"""
+	var color_name = ""
+	if color_index >= 0 and color_index < color_names.size():
+		color_name = color_names[color_index]
+	else:
+		print("错误: 颜色索引 %d 超出范围" % color_index)
+		return []
+	
+	if not color_name in teleporter_pairs_by_color:
+		print("颜色 %s 没有传送门配对" % color_name)
+		return []
+	
+	var pairs = teleporter_pairs_by_color[color_name]
+	print("找到颜色 %s 的 %d 个传送门对" % [color_name, pairs.size()])
+	
+	# 创建详细的结果数组
+	var result = []
+	for i in range(pairs.size()):
+		var pair_info = pairs[i]
+		var entrance = pair_info.entrance
+		var exit = pair_info.exit
+		
+		var pair_data = {
+			"index": i,
+			"color": color_name,
+			"entrance": {
+				"name": entrance.name,
+				"position": entrance.position,
+				"is_valid": is_instance_valid(entrance)
+			},
+			"exit": {
+				"name": exit.name,
+				"position": exit.position,
+				"is_valid": is_instance_valid(exit)
+			},
+			"is_paired": (is_instance_valid(entrance) and 
+						 is_instance_valid(exit) and 
+						 entrance.paired_target == exit and
+						 exit.paired_target == entrance)
+		}
+		result.append(pair_data)
+	
+	return result
+
+func save_teleporter_pair_states():
+	"""保存传送门配对状态"""
+	print("开始保存传送门配对状态...")
+	
+	teleporter_save_data.clear()
+	
+	# 保存全局配对信息
+	teleporter_save_data["pair_count_by_color"] = {}
+	teleporter_save_data["pairs"] = {}
+	
+	var total_saved = 0
+	
+	for color in teleporter_pairs_by_color:
+		var pairs = teleporter_pairs_by_color[color]
+		teleporter_save_data["pair_count_by_color"][color] = pairs.size()
+		
+		for i in range(pairs.size()):
+			var pair_info = pairs[i]
+			var entrance = pair_info.entrance
+			var exit = pair_info.exit
+			
+			if is_instance_valid(entrance) and is_instance_valid(exit):
+				# 保存配对信息
+				var pair_key = "%s_%s" % [entrance.name, exit.name]
+				teleporter_save_data["pairs"][pair_key] = {
+					"color": color,
+					"entrance_name": entrance.name,
+					"exit_name": exit.name,
+					"entrance_position": {"x": entrance.position.x, "y": entrance.position.y},
+					"exit_position": {"x": exit.position.x, "y": exit.position.y},
+					"entrance_is_entrance": entrance.is_entrance,
+					"exit_is_entrance": exit.is_entrance
+				}
+				total_saved += 1
+				
+				print("保存配对: %s ↔ %s" % [entrance.name, exit.name])
+	
+	# 保存未配对的传送门
+	teleporter_save_data["unpaired_teleporters"] = []
+	var teleporters = get_all_teleporters()
+	
+	for teleporter in teleporters:
+		if is_instance_valid(teleporter) and not teleporter.paired_target:
+			var teleporter_data = {
+				"name": teleporter.name,
+				"color": teleporter.color,
+				"position": {"x": teleporter.position.x, "y": teleporter.position.y},
+				"is_entrance": teleporter.is_entrance
+			}
+			teleporter_save_data["unpaired_teleporters"].append(teleporter_data)
+	
+	print("传送门状态保存完成: 保存了 %d 个配对" % total_saved)
+	return teleporter_save_data
+
+func load_teleporter_pair_states():
+	"""加载传送门配对状态"""
+	print("开始加载传送门配对状态...")
+	
+	if teleporter_save_data.is_empty():
+		print("警告: 没有保存的传送门数据")
+		return false
+	
+	# 先清空现有配对
+	clear_all_teleporter_pairs()
+	
+	var total_loaded = 0
+	var total_failed = 0
+	
+	# 重新建立配对
+	if "pairs" in teleporter_save_data:
+		for pair_key in teleporter_save_data["pairs"]:
+			var pair_data = teleporter_save_data["pairs"][pair_key]
+			var entrance_name = pair_data["entrance_name"]
+			var exit_name = pair_data["exit_name"]
+			
+			# 查找传送门
+			var entrance = find_teleporter_by_name(entrance_name)
+			var exit = find_teleporter_by_name(exit_name)
+			
+			if entrance and exit:
+				# 恢复配对
+				entrance.set_paired_target(exit)
+				exit.set_paired_target(entrance)
+				
+				# 恢复状态
+				if "entrance_is_entrance" in pair_data:
+					entrance.is_entrance = pair_data["entrance_is_entrance"]
+				if "exit_is_entrance" in pair_data:
+					exit.is_entrance = pair_data["exit_is_entrance"]
+				
+				# 更新标签
+				entrance.update_teleporter_label()
+				exit.update_teleporter_label()
+				
+				total_loaded += 1
+				print("加载配对: %s ↔ %s" % [entrance.name, exit.name])
+			else:
+				total_failed += 1
+				print("加载失败: 无法找到传送门 %s 或 %s" % [entrance_name, exit_name])
+	
+	# 重建配对分组
+	setup_teleporter_pairs_by_color()
+	
+	print("传送门状态加载完成: 成功 %d, 失败 %d" % [total_loaded, total_failed])
+	return total_loaded > 0
+
+func switch_teleporter_pair_states(color_to_switch: String):
+	"""切换指定颜色传送门的状态"""
+	print("开始切换颜色 %s 的传送门状态..." % color_to_switch)
+	
+	if not color_to_switch in teleporter_pairs_by_color:
+		print("错误: 颜色 %s 没有传送门配对" % color_to_switch)
+		return false
+	
+	var pairs = teleporter_pairs_by_color[color_to_switch]
+	if pairs.size() == 0:
+		print("颜色 %s 没有可切换的传送门对" % color_to_switch)
+		return false
+	
+	var switched_count = 0
+	
+	for pair_info in pairs:
+		var entrance = pair_info.entrance
+		var exit = pair_info.exit
+		
+		if is_instance_valid(entrance) and is_instance_valid(exit):
+			# 交换状态
+			entrance.is_entrance = not entrance.is_entrance
+			exit.is_entrance = not exit.is_entrance
+			
+			# 更新标签
+			entrance.update_teleporter_label()
+			exit.update_teleporter_label()
+			
+			# 重新配对（因为状态变了，配对关系也需要交换）
+			entrance.set_paired_target(exit)
+			exit.set_paired_target(entrance)
+			
+			switched_count += 2
+			print("切换状态: %s → %s, %s → %s" % [
+				entrance.name, ("传" if entrance.is_entrance else "送"),
+				exit.name, ("传" if exit.is_entrance else "送")
+			])
+	
+	# 重新验证
+	validate_teleporter_pairs()
+	
+	# 更新UI
+	update_ui_info()
+	queue_redraw()
+	
+	print("切换完成: 切换了 %d 个传送门状态" % switched_count)
+	return true
+
+# 辅助函数
+
+func get_all_teleporters() -> Array:
+	"""获取所有传送门"""
+	var teleporters = []
+	for element in elements:
+		if is_instance_valid(element) and element is Teleporter:
+			teleporters.append(element)
+	return teleporters
+
+func find_teleporter_by_name(teleporter_name: String) -> Teleporter:
+	"""通过名称查找传送门"""
+	for element in elements:
+		if is_instance_valid(element) and element is Teleporter and element.name == teleporter_name:
+			return element
+	return null
+
+func clear_all_teleporter_pairs():
+	"""清除所有传送门配对"""
+	print("清除所有传送门配对...")
+	
+	var teleporters = get_all_teleporters()
+	for teleporter in teleporters:
+		if is_instance_valid(teleporter):
+			teleporter.clear_paired_target()
+	
+	teleporter_pairs_by_color.clear()
+	print("已清除 %d 个传送门的配对" % teleporters.size())
+
+func get_teleporter_color_groups() -> Dictionary:
+	"""获取按颜色分组的传送门统计"""
+	var groups = {}
+	var teleporters = get_all_teleporters()
+	
+	for teleporter in teleporters:
+		if is_instance_valid(teleporter):
+			var color = teleporter.color
+			if not color in groups:
+				groups[color] = {"total": 0, "entrances": 0, "exits": 0}
+			
+			groups[color].total += 1
+			if teleporter.is_entrance:
+				groups[color].entrances += 1
+			else:
+				groups[color].exits += 1
+	
+	return groups
+
+func print_teleporter_summary():
+	"""打印传送门摘要信息"""
+	print("=== 传送门摘要 ===")
+	
+	var groups = get_teleporter_color_groups()
+	for color in groups:
+		var info = groups[color]
+		print("颜色 %s: 总数=%d, 入口=%d, 出口=%d" % [
+			color, info.total, info.entrances, info.exits
+		])
+	
+	print("配对组: %d 种颜色" % teleporter_pairs_by_color.size())
+	for color in teleporter_pairs_by_color:
+		print("  %s: %d 对" % [color, teleporter_pairs_by_color[color].size()])
+	
+	print("=================")

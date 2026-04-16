@@ -1,10 +1,13 @@
 [gd_scene format=3 uid="uid://d3g202bq5trsg"]
 
 [ext_resource type="PackedScene" uid="uid://ldsrn7cbqssl" path="res://scenes/elements/base_mechanism.tscn" id="1_qsi4g"]
-[ext_resource type="Script" uid="uid://cco2e8qfuagsf" path="res://scripts/elements/teleporter_in.gd" id="2_8h4bu"]
+[ext_resource type="Script" uid="uid://sfpnh17hv5x8" path="res://scripts/elements/teleporter.gd" id="2_8h4bu"]
 
-[node name="Mechanism" unique_id=2132526249 instance=ExtResource("1_qsi4g")]
+[node name="teleporters" unique_id=2132526249 instance=ExtResource("1_qsi4g")]
 script = ExtResource("2_8h4bu")
+is_entrance = true
+color = ""
+paired_teleporter_path = NodePath("")
 
 [node name="label" parent="." index="1" unique_id=1899630671]
 offset_left = -15.0
